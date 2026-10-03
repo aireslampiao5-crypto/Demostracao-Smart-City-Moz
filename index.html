@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="pt-MZ"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SmartCity Moz — Cidade GLB</title>
+<style>
+:root{--teal:#007a5e;--gold:#ffc72c;--red:#d8232a}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:#0a1210;overflow:hidden;font-family:'Segoe UI',Arial,sans-serif;color:#eee9dc}
+#flag{height:5px;position:fixed;top:0;left:0;width:100%;z-index:30;background:linear-gradient(90deg,var(--teal) 0 25%,#111 25% 50%,var(--gold) 50% 75%,var(--red) 75%)}
+.box{background:rgba(10,18,16,.78);backdrop-filter:blur(6px);border:1px solid #25423b;border-radius:12px}
+#top{position:fixed;top:14px;left:14px;right:14px;z-index:20;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+#search{flex:1;min-width:200px;max-width:380px;position:relative}
+#q{width:100%;padding:11px 14px;border-radius:12px;border:1px solid #25423b;background:rgba(10,18,16,.85);color:#eee9dc;font-size:14px;outline:none}
+#res{position:absolute;top:44px;left:0;right:0;overflow:hidden;display:none}
+#res div{padding:9px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #1c332d}#res div:hover{background:#16302a}#res small{color:#8fa39c}
+#flood{padding:8px 10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
+button{background:#16302a;color:#eee9dc;border:1px solid #2c5248;border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer}button.on{background:#0d5c47;border-color:var(--gold)}
+#panel{position:fixed;right:14px;bottom:62px;z-index:20;width:min(300px,calc(100% - 28px));padding:14px 16px;display:none}
+#dock{position:fixed;left:14px;bottom:62px;z-index:20;width:min(330px,calc(100% - 28px));display:flex;flex-direction:column;gap:8px;max-height:58vh;overflow:auto}
+#panel h2{margin:0 0 2px;font-size:16px}#panel .t{font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em}
+#panel p{font-size:12.5px;color:#b9c9c3;margin:8px 0 0;line-height:1.5}#panel .sim{font-size:10.5px;color:#d98b8b}
+#status{position:fixed;bottom:14px;left:14px;right:14px;z-index:20;font:11.5px Consolas,monospace;color:#8fa39c;padding:8px 12px;border-radius:8px}
+#status b{color:var(--gold)}
+.lbl{font-size:11px;font-weight:600;color:#eee9dc;text-shadow:0 0 4px #000,0 0 8px #000;pointer-events:none;white-space:nowrap}
+#load{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:#0a1210;color:var(--gold);font-size:14px;line-height:1.6}
+#gate{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:20px;background:#0a1210}
+#gf{width:min(380px,100%);padding:22px;border:1px solid #25423b;border-radius:14px;background:#0e1b17}
+#gf h1{margin:0 0 6px;font-size:20px;color:var(--gold)}#gf p{margin:0 0 14px;font-size:12.5px;color:#b9c9c3;line-height:1.5}
+#gf label{display:block;font-size:12px;color:#8fa39c;margin-bottom:10px}
+#gf input{width:100%;margin-top:4px;padding:11px 12px;border-radius:10px;border:1px solid #2c5248;background:#0a1210;color:#eee9dc;font-size:15px;outline:none}
+#gf button{width:100%;padding:12px;font-size:14px;font-weight:700;background:#0d5c47;border-color:var(--gold)}#gE{color:#ff8a8a;font-size:12px;min-height:16px;margin-bottom:6px}
+</style></head><body>
+<div id="load"><div>A carregar a cidade GLB… <span id="pct"></span></div></div>
+<div id="flag"></div>
+<div id="gate"><form id="gf"><h1>🌍 SmartCity Moz</h1><p>Antes de abrir o mapa, indique os seus dados. Serão usados apenas para o tratar pelo nome e para lhe enviar alertas de cheia (demonstração).</p>
+<label>Nome<input id="gN" maxlength="40" autocomplete="given-name"></label>
+<label>Contacto (WhatsApp)<input id="gT" inputmode="tel" placeholder="84 123 4567" autocomplete="tel"></label>
+<div id="gE"></div><button type="submit">Abrir o mapa</button></form></div>
+<script>window.SC_API=(location.protocol==='file:'?'http://localhost:5000':'');</script>
+<script>
+(function(){const g=document.getElementById('gate');
+const norm=t=>{let d=String(t).replace(/\D/g,'');const plus=/^\s*\+/.test(t);if(d.startsWith('258')&&d.length===12)d=d.slice(3);else if(plus&&d.length>=9&&d.length<=15&&!d.startsWith('258'))return'+'+d;return /^8[2-7]\d{7}$/.test(d)?'+258'+d:null;};
+const fn=s=>{const w=s.trim().split(/\s+/)[0]||'';return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();};
+const save=()=>{try{sessionStorage.setItem('scm_user',JSON.stringify({n:USER.nome,t:USER.tel}));}catch(e){}};
+window.USER={ready:false};
+window.setUserTel=t=>{const v=norm(t);if(!v)return null;USER.tel=v;save();return v;};
+let sv=null;try{sv=JSON.parse(sessionStorage.getItem('scm_user')||'null');}catch(e){}
+if(sv&&sv.n&&sv.t){window.USER={ready:true,nome:sv.n,primeiro:fn(sv.n),tel:sv.t};g.remove();}
+else document.getElementById('gf').onsubmit=e=>{e.preventDefault();
+  const n=document.getElementById('gN').value.trim(),t=norm(document.getElementById('gT').value),er=document.getElementById('gE');
+  if(n.length<2){er.textContent='Indique o seu nome.';return;}
+  if(!t){er.textContent='Contacto inválido. Exemplo: 84 123 4567.';return;}
+  window.USER={ready:true,nome:n,primeiro:fn(n),tel:t};save();g.remove();window.dispatchEvent(new Event('scm-user'));};
+})();
+</script>
+<div id="top">
+  <div id="search"><input id="q" placeholder="Pesquisar: banco, clínica, loja…" autocomplete="off"><div id="res" class="box"></div></div>
+  <div id="flood" class="box"><b>🌧 Cheia:</b>
+    <button data-l="0" class="on">Sem chuva</button><button data-l="0.4">Leve</button><button data-l="1.2">Intensa</button><button data-l="2.6">Severa</button></div>
+</div>
+<div id="panel" class="box"></div>
+<div id="dock"></div>
+<div id="status" class="box">Modelo: <b id="sz">—</b> · POIs: <b id="np">0</b> · Semáforos: <b id="ns">0</b> · Água: <b id="wl">0.0 m</b> <span style="color:#d98b8b">· simulado</span></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<script>
+// ===== CONFIG (o "cérebro" mapeia o corpo GLB → funções da cidade) =====
+const GLB_URL=(location.protocol==='file:'?'http://localhost:5000/':'')+'cidade.glb?v=1', SCALE=0.01;           // modelo está em cm
+const POI_RULES=[ // DEMO: atribuição editável. match = nome do objeto no GLB
+  {m:/^LM_Paramount/,tipo:'banco',nome:'Banco (demo)'},
+  {m:/^LM_Clinic/,tipo:'hospital',nome:'Clínica / Hospital'},
+  {m:/^LM_PawnShop/,tipo:'comercio',nome:'Loja'},
+  {m:/^LM_Laundrette/,tipo:'comercio',nome:'Lavandaria'},
+  {m:/^LM_Liquor/,tipo:'comercio',nome:'Mercearia'},
+  {m:/^FFactory/,tipo:'comercio',nome:'Mercado de Peixe'},
+  {m:/^Projects/,tipo:'habitacao',nome:'Bloco de habitação'},
+  {m:/^LM_Basketball/,tipo:'lazer',nome:'Campo de desporto'}];
+const DADOS_ESTATICOS={banco:'Fila e lotação (simulados)',hospital:'Urgências: aberto 24 h (exemplo)',comercio:'Produtos e stock (simulados)',habitacao:'Sem serviços associados',lazer:'Livre'};
+
+// ===== CENA =====
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x13202a);scene.fog=new THREE.Fog(0x13202a,300,900);
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.5,3000);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);renderer.outputEncoding=THREE.sRGBEncoding;document.body.appendChild(renderer.domElement);
+const lr=new THREE.CSS2DRenderer();lr.setSize(innerWidth,innerHeight);Object.assign(lr.domElement.style,{position:'absolute',top:0,pointerEvents:'none'});document.body.appendChild(lr.domElement);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.08;controls.maxPolarAngle=Math.PI*.495;controls.screenSpacePanning=true;controls.zoomSpeed=1.1;controls.panSpeed=1.1;controls.rotateSpeed=.8;controls.addEventListener('start',()=>{fly=null;});try{controls.listenToKeyEvents(window);controls.keyPanSpeed=18;}catch(e){}
+scene.add(new THREE.HemisphereLight(0xbfd3e0,0x24352f,.9));
+const sun=new THREE.DirectionalLight(0xfff0d0,.9);sun.position.set(150,250,100);scene.add(sun);
+
+const city=new THREE.Group();city.scale.setScalar(SCALE);scene.add(city);
+const pois=[],sems=[],obst=[];let water,rain,groundTop=0,gsize=new THREE.Vector3(),hi,fly=null;
+
+new THREE.GLTFLoader().load(GLB_URL,g=>{
+  city.add(g.scene);city.updateMatrixWorld(true);
+  const box=new THREE.Box3().setFromObject(city),c=box.getCenter(new THREE.Vector3());
+  city.position.set(-c.x,-box.min.y,-c.z);city.updateMatrixWorld(true);
+  const b2=new THREE.Box3().setFromObject(city);b2.getSize(gsize);
+  document.getElementById('sz').textContent=Math.round(gsize.x)+' × '+Math.round(gsize.z)+' m';
+  const root=g.scene.getObjectByName('RootNode')||g.scene;
+  root.children.forEach(o=>{
+    const bb=new THREE.Box3().setFromObject(o);
+    if(/ConcreteBlock/.test(o.name)){groundTop=bb.max.y;return;}
+    if(!/StopLights|StreetLamp|Basketball|^group$/.test(o.name))obst.push(bb);
+    const r=POI_RULES.find(r=>r.m.test(o.name));
+    if(r){const p={obj:o,tipo:r.tipo,nome:r.nome+' '+(pois.filter(x=>x.nome.startsWith(r.nome)).length+1),box:bb,centro:bb.getCenter(new THREE.Vector3())};
+      pois.push(p);o.userData.poi=p;
+      const d=document.createElement('div');d.className='lbl';d.textContent=p.nome;const l=new THREE.CSS2DObject(d);l.position.set(p.centro.x,bb.max.y+2,p.centro.z);scene.add(l);}
+    else if(/^StopLights/.test(o.name)){
+      const cen=bb.getCenter(new THREE.Vector3());
+      // bolha removida: guardamos só a posição; o ciclo interno continua a regular os carros (módulo a rever depois)
+      sems.push({id:'sem'+(sems.length+1),pos:new THREE.Vector3(cen.x,bb.max.y+3,cen.z),mode:'auto',off:sems.length*2.1});}
+  });
+  document.getElementById('np').textContent=pois.length;document.getElementById('ns').textContent=sems.length;
+  // água (plano sobre o chão do GLB)
+  water=new THREE.Mesh(new THREE.PlaneGeometry(gsize.x,gsize.z),new THREE.MeshStandardMaterial({color:0x2a8bd6,transparent:true,opacity:.6,roughness:.2,metalness:.1}));
+  water.rotation.x=-Math.PI/2;water.position.y=groundTop-5;water.visible=false;scene.add(water);
+  const N=2500,pos=new Float32Array(N*3);for(let i=0;i<N;i++){pos[i*3]=(Math.random()-.5)*gsize.x;pos[i*3+1]=Math.random()*80;pos[i*3+2]=(Math.random()-.5)*gsize.z;}
+  const rg=new THREE.BufferGeometry();rg.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  rain=new THREE.Points(rg,new THREE.PointsMaterial({color:0x9ecbff,size:.5,transparent:true,opacity:.7}));rain.visible=false;scene.add(rain);
+  const d=Math.max(gsize.x,gsize.z);camera.position.set(0,d*.45,d*.6);controls.target.set(0,5,0);controls.minDistance=4;controls.maxDistance=d*1.5;controls.userData={lim:{x:gsize.x*.6,z:gsize.z*.6}};
+  document.getElementById('load').remove();if(window.onCityReady)onCityReady();
+},x=>{if(x.total)document.getElementById('pct').textContent=Math.round(x.loaded/x.total*100)+'%';},
+e=>{document.getElementById('load').innerHTML='<div>Não consegui carregar o modelo GLB.<br>Abra por um servidor local, na mesma pasta do GLB:<br><code>python -m http.server 8000</code><br>ou use a versão <b>standalone</b>.</div>';});
+
+// ===== SEMÁFOROS (simulados) — futuro: POST /api/semaphores/:id → Flask → serial → Arduino =====
+const COR={red:0xd8232a,yellow:0xffc72c,green:0x3ddc97};
+function commandSemaphore(i,mode){sems[i].mode=mode;}
+function semState(s,t){if(s.mode!=='auto')return s.mode;const k=(t+s.off)%7.7;return k<3.6?'green':k<4.5?'yellow':'red';}
+
+// ===== INTERAÇÃO =====
+const ray=new THREE.Raycaster(),m2=new THREE.Vector2();let dn=null;
+renderer.domElement.addEventListener('pointerdown',e=>dn=[e.clientX,e.clientY]);
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!dn||Math.hypot(e.clientX-dn[0],e.clientY-dn[1])>5)return;
+  m2.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);ray.setFromCamera(m2,camera);
+  for(const h of ray.intersectObject(city,true)){let o=h.object;while(o&&!o.userData.poi)o=o.parent;if(o){select(o.userData.poi);return;}}
+  window.onGroundClick&&onGroundClick(ray);
+});
+const panel=document.getElementById('panel');let bank={in:14,q:6},pSel=null;
+function select(p,go){
+  pSel=p;if(hi)scene.remove(hi);hi=new THREE.Box3Helper(p.box,0xffc72c);scene.add(hi);renderPanel();
+  if(go)fly={to:p.centro.clone(),t:0};
+}
+function renderPanel(){const p=pSel;if(!p)return;panel.style.display='block';
+  let body=DADOS_ESTATICOS[p.tipo];
+  if(p.tipo==='banco')body='Pessoas dentro: <b>'+bank.in+'</b><br>Na fila: <b>'+bank.q+'</b><br>Espera estimada: <b>'+bank.q*3+' min</b><div class="sim">SIMULADO — sem sensores ultrassónicos ligados</div>';
+  panel.innerHTML='<div class="t">'+p.tipo+'</div><h2>'+p.nome+'</h2><p>'+body+'</p><p><button onclick="routeTo()">🧭 Rota até aqui</button></p>';}
+function showSem(i){pSel=null;if(hi)scene.remove(hi);const s=sems[i];panel.style.display='block';
+  panel.innerHTML='<div class="t">semáforo</div><h2>'+s.id+'</h2><p>Modo: <b>'+(s.mode==='auto'?'automático':'manual ('+s.mode+')')+'</b><br>Toque de novo para alterar.<div class="sim">SIMULADO — sem Arduino ligado</div></p>';}
+setInterval(()=>{bank.in=Math.max(0,bank.in+Math.round(Math.random()*2-1));bank.q=Math.max(0,bank.q+Math.round(Math.random()*2-1));if(pSel&&pSel.tipo==='banco')renderPanel();},2500);
+
+// pesquisa
+const q=document.getElementById('q'),res=document.getElementById('res');
+q.addEventListener('input',()=>{const v=q.value.trim().toLowerCase();res.innerHTML='';
+  const r=v?pois.filter(p=>(p.nome+' '+p.tipo).toLowerCase().includes(v)):[];
+  res.style.display=r.length?'block':'none';
+  r.slice(0,6).forEach(p=>{const d=document.createElement('div');d.innerHTML=p.nome+' <small>· '+p.tipo+'</small>';d.onclick=()=>{select(p,true);res.style.display='none';q.value='';};res.appendChild(d);});});
+
+// cheia
+let wTarget=0,wLevel=0;
+document.querySelectorAll('#flood button').forEach(b=>b.onclick=()=>{wTarget=+b.dataset.l;
+  document.querySelectorAll('#flood button').forEach(x=>x.classList.toggle('on',x===b));});
+
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);lr.setSize(innerWidth,innerHeight);});
+const clock=new THREE.Clock();
+(function loop(){requestAnimationFrame(loop);const t=clock.getElapsedTime();
+  window.tick&&tick(t);
+  if(water){wLevel+=(wTarget-wLevel)*.03;water.visible=false;water.position.y=groundTop+wLevel;
+    window.simStatus&&(document.getElementById('wl').textContent=simStatus());
+    rain.visible=wTarget>0;if(rain.visible){const a=rain.geometry.attributes.position;for(let i=0;i<a.count;i++){let y=a.getY(i)-(.6+wTarget*.3);if(y<groundTop)y=80;a.setY(i,y);}a.needsUpdate=true;}}
+  if(fly){fly.t+=.04;const k=Math.min(fly.t,1);controls.target.lerp(fly.to,.12);
+    const want=fly.to.clone().add(new THREE.Vector3(35,30,45));camera.position.lerp(want,.08);if(k>=1.6)fly=null;}
+  if(controls.userData&&controls.userData.lim){const L=controls.userData.lim,t=controls.target,cx=Math.max(-L.x,Math.min(L.x,t.x)),cz=Math.max(-L.z,Math.min(L.z,t.z));if(cx!==t.x||cz!==t.z){camera.position.x+=cx-t.x;camera.position.z+=cz-t.z;t.x=cx;t.z=cz;}if(t.y<0){camera.position.y+=-t.y;t.y=0;}}
+  controls.update();renderer.render(scene,camera);lr.render(scene,camera);})();
+</script><script>
+// ===== MOBILIDADE: grafo de ruas + trânsito simulado + bloqueios + cheias por via + rotas =====
+// ATENÇÃO: o grafo foi inferido da planta do GLB (semáforos e malha do chão). Ajuste NODE_X/ROW_Z se não coincidir.
+(function(){
+// NODE_X/ROW_Z estão em metros no sistema ORIGINAL do GLB; o offset de centragem é somado acima.
+const NODE_X=[-377,-287,-225,-143,-71,1],ROW_Z=[-71.5,-142,-214],COLS=[[0,1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5]],COTA=[1.8,.9,.3]; // COTA = altitude virtual (m) a partir da qual a via alaga
+const nodes=[],edges=[],cars=[];let ready=false,last=0,lastSig=0,sig='',showRoads=true,target=null,routeMesh=null,origin=0;
+const other=(e,n)=>e.a===n?e.b:e.a, flooded=e=>(e.dep||0)>.2, passable=e=>!e.blocked&&!flooded(e);
+const box=document.createElement('div');box.className='box';
+box.style.cssText='padding:10px 12px;font-size:12px;line-height:1.5';
+box.innerHTML=`<div><b>🚗 Mobilidade</b> <span id="mi" style="color:#8fa39c"></span></div><div style="margin:6px 0"><button id="bR" class="on">Ruas/trânsito</button></div>
+<div style="display:flex;gap:6px;align-items:center;margin:4px 0">🟢<select id="sO" style="background:#16302a;color:#eee9dc;border:1px solid #2c5248;border-radius:6px;padding:5px;flex:1;min-width:0;font-size:12px"></select><button id="pO" title="Escolher no mapa">📍</button></div>
+<div style="display:flex;gap:6px;align-items:center;margin:4px 0">🔴<select id="sD" style="background:#16302a;color:#eee9dc;border:1px solid #2c5248;border-radius:6px;padding:5px;flex:1;min-width:0;font-size:12px"></select><button id="pD" title="Escolher no mapa">📍</button></div>
+<div style="margin:6px 0"><button id="bGo" class="on">🤖 Calcular melhor rota</button> <button id="bSw" title="Inverter">⇅</button> <button id="bX">🧹 Limpar rota</button></div>
+<div id="ri" style="margin-top:6px;color:#b9c9c3">Escolha a origem e o destino na lista, ou toque em 📍 e depois no mapa.</div><div id="riA" style="margin-top:4px;color:#8fd9b6"></div>`;
+document.getElementById('dock').appendChild(box);
+const $=id=>document.getElementById(id);
+$('bR').onclick=()=>{showRoads=!showRoads;$('bR').classList.toggle('on',showRoads);};
+
+
+// ---- carros com forma de carro: corpo, cabine inclinada com vidros, rodas, faróis e luzes de travão ----
+const GC={},MC={};
+const bxg=(w,h,d)=>GC[w+'_'+h+'_'+d]||(GC[w+'_'+h+'_'+d]=new THREE.BoxGeometry(w,h,d));
+const mat=c=>MC[c]||(MC[c]=new THREE.MeshStandardMaterial({color:c,roughness:.45,metalness:.25}));
+const flat=c=>MC['f'+c]||(MC['f'+c]=new THREE.MeshBasicMaterial({color:c}));
+const TIRE=new THREE.MeshLambertMaterial({color:0x15181a}),RIM=new THREE.MeshLambertMaterial({color:0x9aa5a2}),GLASS=new THREE.MeshStandardMaterial({color:0x1c2b33,roughness:.15,metalness:.6});
+const CYL=new THREE.CylinderGeometry(.4,.4,.28,14),HUB=new THREE.CylinderGeometry(.2,.2,.3,10);
+function cabGeo(l,h,w,top){const k='c'+l+'_'+h+'_'+w;if(GC[k])return GC[k];const g=new THREE.BoxGeometry(l,h,w),p=g.attributes.position;
+  for(let i=0;i<p.count;i++)if(p.getY(i)>0)p.setX(i,p.getX(i)*top-l*.03);   // topo mais estreito: pára-brisas e vidro traseiro inclinados
+  GC[k]=g;return g;}
+function makeCar(i,col){ // origem a 0,9 m do chão (como a caixa antiga); frente = +x
+  const T=['sedan','suv','sedan','taxi','chapa','hatch','suv'][i%7],g=new THREE.Group();
+  const L={sedan:4.3,suv:4.6,taxi:4.3,chapa:5.6,hatch:3.8}[T],W=T==='chapa'?2:1.85,bm=mat(T==='taxi'?0xffc72c:T==='chapa'?0xeee9dc:col);
+  const yb=-.56,lh=T==='chapa'?1.3:T==='suv'?.82:.62; // yb = fundo do corpo (34 cm acima do chão, que está em y = −0,9)
+  const add=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);g.add(o);return o;};
+  add(bxg(L,lh,W),bm,0,yb+lh/2,0);
+  if(T==='chapa'){add(bxg(+(L*.9).toFixed(2),.55,W+.02),GLASS,0,yb+lh*.72,0);add(bxg(L+.02,.16,W+.02),mat(0x1f6fc4),0,yb+.38,0);}   // minibus: faixa de vidros + risca azul
+  else{const cf={sedan:.5,taxi:.5,suv:.62,hatch:.56}[T],ch=T==='suv'?.62:.55,cx={sedan:-.25,taxi:-.25,suv:-.2,hatch:-.3}[T];
+    const cab=new THREE.Mesh(cabGeo(+(L*cf).toFixed(2),ch,+(W*.9).toFixed(2),.7),[GLASS,GLASS,bm,bm,GLASS,GLASS]);cab.position.set(cx,yb+lh+ch/2,0);g.add(cab);
+    if(T==='taxi')add(bxg(.5,.18,.8),flat(0xfff7d6),cx,yb+lh+ch+.1,0);}                                                                // taxi: luminoso no teto
+  [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([a,s])=>{const x=a*L*.31,z=s*(W/2-.1);
+    const w=add(CYL,TIRE,x,-.5,z);w.rotation.x=Math.PI/2;const h=add(HUB,RIM,x,-.5,z+s*.02);h.rotation.x=Math.PI/2;});
+  const tail=new THREE.MeshBasicMaterial({color:0x6b1414});
+  [-1,1].forEach(s=>{add(bxg(.08,.16,.4),flat(0xfff2c4),L/2+.01,yb+lh*.62,s*(W/2-.35));add(bxg(.08,.16,.4),tail,-L/2-.01,yb+lh*.62,s*(W/2-.35));});
+  add(bxg(.14,.2,+(W*.96).toFixed(2)),mat(0x20262a),L/2,yb+.12,0);add(bxg(.14,.2,+(W*.96).toFixed(2)),mat(0x20262a),-L/2,yb+.12,0);
+  g.userData.tl=tail.color;return g;}
+
+window.onCityReady=function(){
+  COLS.forEach((cs,r)=>cs.forEach(c=>nodes.push({c,r,x:NODE_X[c]+city.position.x,z:ROW_Z[r]+city.position.z,adj:[],sem:[]})));
+  const at=(c,r)=>nodes.find(n=>n.c===c&&n.r===r);
+  const add=(a,b,k)=>{if(!a||!b)return;const e={a,b,len:Math.hypot(a.x-b.x,a.z-b.z),blocked:false,cota:k,cars:0};
+    const dx=b.x-a.x,dz=b.z-a.z,mx=(a.x+b.x)/2,mz=(a.z+b.z)/2,ry=-Math.atan2(dz,dx);
+    const mk=(w,h,col,op)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(e.len,h,w),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op}));m.position.set(mx,groundTop+.3,mz);m.rotation.y=ry;m.visible=false;scene.add(m);return m;};
+    e.dbg=mk(1.6,.2,0x3ddc97,.85);e.blk=mk(11,.3,0xd8232a,.55);e.fl=mk(15,.3,0x2a8bd6,.6);edges.push(e);a.adj.push(e);b.adj.push(e);};
+  for(let r=0;r<3;r++)for(let c=0;c<5;c++)add(at(c,r),at(c+1,r),COTA[r]);
+  for(let r=0;r<2;r++)for(let c=1;c<=5;c++)add(at(c,r),at(c,r+1),(COTA[r]+COTA[r+1])/2);
+  sems.forEach((s,i)=>{let b=null,d=1e9;nodes.forEach(n=>{const q=Math.hypot(n.x-s.pos.x,n.z-s.pos.z);if(q<d){d=q;b=n;}});if(d<40)b.sem.push(i);});
+  const pal=[0xffc72c,0xd8232a,0x3ddc97,0xeee9dc,0x2a8bd6,0xff8a3d];
+  for(let i=0;i<28;i++){const e=edges[Math.floor(Math.random()*edges.length)],f=Math.random()<.5;
+    const m=makeCar(i,pal[i%pal.length]);scene.add(m);
+    cars.push({m,e,a:f?e.a:e.b,b:f?e.b:e.a,t:Math.random(),v:7+Math.random()*6,wait:0,node:null,last:null});}
+  ready=true;window.MOB={nodes,edges,dij,passable,other,plan,picking:()=>!!pickK};fillSel();plan();
+};
+function startEdge(c,t){
+  const n=c.node;if(n.sem.some(i=>!sems[i].ctl&&semState(sems[i],t)==='red')){c.wait=.3;return;}
+  let o=n.adj.filter(passable);const fw=o.filter(e=>e!==c.last);if(fw.length)o=fw;
+  if(!o.length){c.wait=1;return;}
+  o.sort((x,y)=>x.cars-y.cars+Math.random()*2-1);const e=o[0];c.e=e;c.a=n;c.b=other(e,n);c.t=0;
+}
+function step(c,dt,t){
+  if(c.wait>0){c.wait-=dt;return;}
+  if(!c.e){startEdge(c,t);if(!c.e)return;}
+  if(!passable(c.e)){const x=c.a;c.a=c.b;c.b=x;c.t=1-c.t;}
+  const sp=c.v*(1-.55*Math.min(1,(c.e.cars-1)/5)),t0=c.t;c.t+=sp*dt/c.e.len;
+  // semáforos AO VIVO: para antes da linha de paragem com vermelho/amarelo (carros já dentro do cruzamento seguem)
+  const lc=c.b.sem.map(i=>sems[i].ctl).find(Boolean),ln=1-9/c.e.len;
+  if(lc&&t0<=ln&&c.t>ln){const st=lc.state(Math.abs(c.b.x-c.a.x)>Math.abs(c.b.z-c.a.z)?'EW':'NS');if(st==='red'||st==='yellow')c.t=Math.max(t0,ln);}
+  // fila: mantém 7 m ao carro da frente (mesma via e sentido)
+  const gp=7/c.e.len;for(let k=0;k<cars.length;k++){const d=cars[k];if(d!==c&&d.e===c.e&&d.a===c.a&&(d.t>t0||(d.t===t0&&k<cars.indexOf(c)))&&d.t-c.t<gp)c.t=Math.max(t0,d.t-gp);}
+  if(c.t>=1){c.node=c.b;c.last=c.e;c.e=null;return;}
+  const dx=c.b.x-c.a.x,dz=c.b.z-c.a.z,L=Math.hypot(dx,dz),k=c.t;
+  c.m.position.set(c.a.x+dx*k-dz/L*2.3,groundTop+.9,c.a.z+dz*k+dx/L*2.3);c.m.rotation.y=-Math.atan2(dz,dx);
+}
+window.tick=function(t){
+  if(!ready)return;const dt=Math.min(t-last,.1);last=t;
+  edges.forEach(e=>e.cars=0);cars.forEach(c=>{if(c.e)c.e.cars++;});cars.forEach(c=>step(c,dt,t));
+  cars.forEach(c=>{const p=c.m.position,q=Math.hypot(p.x-(c.lx===undefined?p.x:c.lx),p.z-(c.lz===undefined?p.z:c.lz))<.015;c.lx=p.x;c.lz=p.z;if(c.m.userData.tl)c.m.userData.tl.setHex(q?0xff2a2a:0x6b1414);}); // luzes de travão acendem quando o carro está parado
+  let nb=0,nf=0;
+  edges.forEach(e=>{e.dep=window.simEdgeDepth?simEdgeDepth(e.a.x,e.a.z,e.b.x,e.b.z):0;const f=flooded(e);if(e.blocked)nb++;if(f)nf++;
+    e.blk.visible=e.blocked;e.fl.visible=false;
+    e.dbg.visible=showRoads&&!e.blocked&&!f;e.dbg.material.color.setHex(e.cars>=5?0xd8232a:e.cars>=3?0xffc72c:0x3ddc97);});
+  $('mi').textContent='· '+cars.length+' veículos · '+nb+' bloqueadas · '+nf+' alagadas';
+  if(t-lastSig>.4){lastSig=t;const s=edges.map(e=>+passable(e)).join('');if(s!==sig){sig=s;plan();}}
+};
+window.onGroundClick=function(ray){
+  if(!ready)return;const p=new THREE.Vector3();if(!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-groundTop),p))return;
+  if(pickK){setPt(pickK,{x:p.x,z:p.z,nome:'Ponto no mapa'},'m');endPick();return;}
+};
+function dij(s,d,all){
+  const dist=new Map(nodes.map(n=>[n,1e9])),prev=new Map(),Q=new Set(nodes);dist.set(s,0);
+  while(Q.size){let u=null;Q.forEach(n=>{if(u===null||dist.get(n)<dist.get(u))u=n;});if(dist.get(u)>=1e9)break;Q.delete(u);if(u===d)break;
+    u.adj.filter(e=>all||passable(e)).forEach(e=>{const v=other(e,u),w=dist.get(u)+e.len*(all?1:1+.35*e.cars);if(w<dist.get(v)){dist.set(v,w);prev.set(v,{u,e});}});}
+  if(s!==d&&!prev.has(d))return null;const path=[d];let x=d,len=0;while(x!==s){const q=prev.get(x);len+=q.e.len;x=q.u;path.unshift(x);}return{path,len};
+}
+let oP=null,dP=null,pickK=null,active=false,lastR=null;const pins={};
+function fillSel(){const L=pois.map((q,i)=>[q,i]).sort((x,y)=>x[0].nome.localeCompare(y[0].nome));
+  ['sO','sD'].forEach(id=>{const e=$(id),v=e.value;e.innerHTML='<option value="">— escolher —</option><option value="m" hidden>📍 Ponto no mapa</option>'+L.map(x=>'<option value="'+x[1]+'">'+x[0].nome+'</option>').join('');e.value=v||'';});}
+const P=q=>({x:q.centro.x,z:q.centro.z,nome:q.nome,box:q.box});
+function pin(k){if(pins[k])return pins[k];const m=new THREE.Mesh(new THREE.ConeGeometry(2.4,7,14),new THREE.MeshBasicMaterial({color:k==='O'?0x3ddc97:0xe5322d,depthTest:false}));m.rotation.x=Math.PI;m.renderOrder=998;m.visible=false;scene.add(m);return pins[k]=m;}
+function showPins(){[['O',oP],['D',dP]].forEach(([k,q])=>{const m=pin(k);m.visible=!!q;if(q){q.s=q.s||nearE(q);m.position.set(q.s?q.s.ex:q.x,groundTop+4,q.s?q.s.ez:q.z);}});}
+function setPt(k,q,val){if(k==='O')oP=q;else dP=q;$('s'+k).value=val;showPins();if(active)plan();}
+function endPick(){pickK=null;renderer.domElement.style.cursor='';$('pO').classList.remove('on');$('pD').classList.remove('on');if(oP&&dP)$('bGo').click();}
+function startPick(k){if(pickK===k){endPick();return;}pickK=k;renderer.domElement.style.cursor='crosshair';$('pO').classList.toggle('on',k==='O');$('pD').classList.toggle('on',k==='D');$('ri').textContent='Toque no mapa (ou num edifício) para marcar '+(k==='O'?'a origem':'o destino')+'.';}
+['O','D'].forEach(k=>{$('s'+k).onchange=e=>{const v=e.target.value;if(v===''){if(k==='O')oP=null;else dP=null;showPins();plan();return;}if(v==='m')return;const q=pois[+v];setPt(k,P(q),v);};$('p'+k).onclick=()=>startPick(k);});
+$('bX').onclick=()=>{if(pickK)endPick();oP=dP=null;active=false;$('sO').value='';$('sD').value='';showPins();plan();$('ri').textContent='Escolha a origem e o destino na lista, ou toque em 📍 e depois no mapa.';$('riA').textContent='';};
+$('bSw').onclick=()=>{const t=oP;oP=dP;dP=t;const a=$('sO').value;$('sO').value=$('sD').value;$('sD').value=a;showPins();if(active)plan();};
+const _sel=window.select;window.select=function(q){if(pickK){setPt(pickK,P(q),String(pois.indexOf(q)));endPick();return;}return _sel.apply(this,arguments);};
+$('bGo').onclick=async()=>{if(!oP||!dP){$('ri').textContent='Escolha a origem e o destino.';return;}active=true;plan();const A=$('riA');A.textContent='';
+  if(!lastR||typeof KEY==='undefined'||!KEY)return;A.textContent='🤖 A analisar a rota…';
+  try{const t=await callG('És o assistente de mobilidade da cidade. Em no máximo 2 frases curtas e naturais, resume a rota e avisa de desvios, bloqueios ou cheias. Varia as palavras.','DADOS: '+JSON.stringify({origem:oP.nome,destino:dP.nome,metros:Math.round(lastR.len),minutos:+(lastR.sec/60).toFixed(1),desvio_m:lastR.dv,vias_bloqueadas:edges.filter(e=>e.blocked).length,vias_alagadas:edges.filter(flooded).length,veiculos:cars.length}),[],false);A.textContent='🤖 '+t.replace(/\*\*/g,'').trim().slice(0,400);}catch(e){A.textContent='';}};
+window.routeTo=function(){if(!pSel)return;setPt('D',P(pSel),String(pois.indexOf(pSel)));const mb=document.getElementById('mkBm');if(mb&&!mb.classList.contains('on'))mb.click();if(oP)$('bGo').click();else $('ri').textContent='Destino definido: '+pSel.nome+'. Escolha agora a origem.';};
+function nearE(q){let best=null,bd=1e9;
+  edges.forEach(e=>{const vx=e.b.x-e.a.x,vz=e.b.z-e.a.z,L2=vx*vx+vz*vz;if(!L2)return;
+    const u=Math.max(0,Math.min(1,((q.x-e.a.x)*vx+(q.z-e.a.z)*vz)/L2)),px=e.a.x+vx*u,pz=e.a.z+vz*u;
+    let ex=q.x,ez=q.z;if(q.box){ex=Math.max(q.box.min.x,Math.min(q.box.max.x,px));ez=Math.max(q.box.min.z,Math.min(q.box.max.z,pz));}
+    const d=Math.hypot(px-ex,pz-ez);if(d<bd){bd=d;best={e,u,px,pz,ex,ez,d};}});
+  return best;}
+function solve(A,B,all){const ok=e=>all||passable(e),T=[];
+  if(A.e===B.e&&ok(A.e))T.push({len:Math.abs(A.u-B.u)*A.e.len,path:null});
+  const so=[],sd=[];
+  if(ok(A.e))so.push([A.e.a,A.u*A.e.len],[A.e.b,(1-A.u)*A.e.len]);
+  if(ok(B.e))sd.push([B.e.a,B.u*B.e.len],[B.e.b,(1-B.u)*B.e.len]);
+  so.forEach(([n1,c1])=>sd.forEach(([n2,c2])=>{const r=dij(n1,n2,all);if(r)T.push({len:c1+r.len+c2,path:r.path});}));
+  return T.sort((x,y)=>x.len-y.len)[0]||null;}
+function plan(){
+  if(routeMesh){scene.remove(routeMesh);routeMesh.traverse(o=>{o.geometry&&o.geometry.dispose();o.material&&o.material.dispose();});routeMesh=null;}
+  lastR=null;if(!ready||!active||!oP||!dP)return;
+  const A=oP.s=oP.s||nearE(oP),B=dP.s=dP.s||nearE(dP);if(!A||!B)return;
+  const r=solve(A,B,false);
+  if(!r){$('ri').innerHTML='⛔ <b>Sem rota</b> entre '+oP.nome+' e '+dP.nome+': vias bloqueadas ou alagadas (incluindo a via de partida ou de chegada).';return;}
+  const ref=solve(A,B,true),y=groundTop+.8,V=(x,z)=>new THREE.Vector3(x,y,z);
+  let pts=[V(A.px,A.pz)];if(r.path)r.path.forEach(n=>pts.push(V(n.x,n.z)));pts.push(V(B.px,B.pz));
+  pts=pts.filter((q,i)=>!i||q.distanceTo(pts[i-1])>.05);
+  routeMesh=new THREE.Group();
+  if(pts.length>1){const cp=new THREE.CurvePath();for(let i=0;i<pts.length-1;i++)cp.add(new THREE.LineCurve3(pts[i],pts[i+1]));
+    const t=new THREE.Mesh(new THREE.TubeGeometry(cp,pts.length*4,1.5,8,false),new THREE.MeshBasicMaterial({color:0xff1fa9,transparent:true,depthTest:false}));t.renderOrder=999;routeMesh.add(t);}
+  [[A],[B]].forEach(([c])=>{if(c.d>.5){const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(c.px,c.pz),V(c.ex,c.ez)]),new THREE.LineBasicMaterial({color:0xffffff,depthTest:false}));l.renderOrder=999;routeMesh.add(l);}});
+  scene.add(routeMesh);
+  const walk=Math.round(A.d+B.d),dv=Math.round(r.len-ref.len),sec=Math.round(r.len/11);lastR={len:r.len,dv,sec};
+  $('ri').innerHTML='🧭 <b>'+oP.nome+' → '+dP.nome+'</b><br>'+(r.len<1?'Origem e destino no mesmo ponto da via':Math.round(r.len)+' m · ≈ '+Math.floor(sec/60)+' min '+(sec%60)+' s')+(walk>3?'<br>🚶 +'+walk+' m a pé entre a via e o local':'')+(dv>0?'<br><span style="color:#ffc72c">Desvio de +'+dv+' m (trânsito, bloqueios ou cheias)</span>':'');
+}
+})();
+</script>
+<script>
+// ===== SIMULAÇÃO DE CHEIAS (águas pouco profundas em grelha, "virtual pipes") =====
+// Terreno virtual (declive + bacias) sobre o chão plano do GLB; edifícios = obstáculos; chuva, infiltração, escoamento e bomba.
+(function(){
+const CS=4,G=9.81,SUB=3,DT=.04,AP=CS*2,DAMP=.985;
+const RAIN={0:0,0.4:.0003,1.2:.001,2.6:.0025}; // chuva (m/s simulado) por botão — ajustável
+let nx,nz,x0,z0,ST,EX,bc,rEff=0,T,D,Fr,Fl,Fu,Fd,B,pos,aD,geo,mat,pc=[],ready=false,pump=false,stat='0.0 m',pm,info={wet:0,tot:1,mx:0};
+const prev=window.onCityReady;window.onCityReady=function(){prev&&prev();init();};
+function init(){
+  const W=gsize.x,H=gsize.z;nx=Math.ceil(W/CS)+1;nz=Math.ceil(H/CS)+1;x0=-W/2;z0=-H/2;const N=nx*nz;
+  T=new Float32Array(N);D=new Float32Array(N);Fr=new Float32Array(N);Fl=new Float32Array(N);Fu=new Float32Array(N);Fd=new Float32Array(N);B=new Uint8Array(N);ST=new Uint8Array(N);EX=new Float32Array(N);
+  const bas=[[-143,-142,30,.9],[-287,-142,22,.5]].map(b=>[b[0]+city.position.x,b[1]+city.position.z,b[2],b[3]]);
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i,x=x0+i*CS,z=z0+j*CS;
+    let t=.9*(1-i/(nx-1))+.7*(j/(nz-1))+.15*Math.sin(x*.05)*Math.cos(z*.04);
+    bas.forEach(b=>t-=b[3]*Math.exp(-((x-b[0])**2+(z-b[1])**2)/(2*b[2]*b[2])));T[k]=t;
+    B[k]=obst.some(q=>x>q.min.x+.5&&x<q.max.x-.5&&z>q.min.z+.5&&z<q.max.z-.5)?1:0;
+    if(Math.hypot(x-bas[0][0],z-bas[0][1])<12)pc.push(k);}
+  // ruas = canais ligeiramente abaixo dos lotes (sarjetas): a água corre e acumula nas vias
+  const E=(window.MOB&&MOB.edges)||[];
+  if(E.length)for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i;if(B[k])continue;const x=x0+i*CS,z=z0+j*CS;let m=1e9;
+    for(const e of E){const vx=e.b.x-e.a.x,vz=e.b.z-e.a.z,L2=vx*vx+vz*vz||1,u=Math.max(0,Math.min(1,((x-e.a.x)*vx+(z-e.a.z)*vz)/L2)),d=Math.hypot(x-(e.a.x+vx*u),z-(e.a.z+vz*u));if(d<m)m=d;}
+    if(m<9){T[k]-=.15*(m<4?1:1-(m-4)/5);if(m<5)ST[k]=1;}}
+  // telhados: a chuva que cai nos edifícios escorre para a célula livre mais próxima
+  bc=[];for(let k=0;k<N;k++)if(B[k]){bc.push(k);const i=k%nx,j=(k/nx)|0;let hit=-1,bd=99;
+    [[1,0],[-1,0],[0,1],[0,-1]].forEach(([a,b])=>{for(let s=1;s<=6;s++){const ii=i+a*s,jj=j+b*s;if(ii<0||jj<0||ii>=nx||jj>=nz)break;const q=jj*nx+ii;if(!B[q]){if(s<bd){bd=s;hit=q;}break;}}});
+    if(hit>=0)EX[hit]+=.6;}
+  for(let k=0;k<N;k++)if(EX[k]>5)EX[k]=5;
+  pos=new Float32Array(N*3);aD=new Float32Array(N);
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i;pos[k*3]=x0+i*CS;pos[k*3+1]=groundTop;pos[k*3+2]=z0+j*CS;}
+  const idx=[];for(let j=0;j<nz-1;j++)for(let i=0;i<nx-1;i++){const a=j*nx+i,b=a+1,c=a+nx,d=c+1;idx.push(a,c,b,b,c,d);}
+  geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));geo.setAttribute('aD',new THREE.BufferAttribute(aD,1));
+  geo.setIndex(new THREE.BufferAttribute(new Uint32Array(idx),1));
+  mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,uniforms:{uT:{value:0}},
+    vertexShader:'attribute float aD;varying float vD;varying vec2 vP;void main(){vD=aD;vP=position.xz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+    fragmentShader:'uniform float uT;varying float vD;varying vec2 vP;void main(){float a=smoothstep(.015,.12,vD);if(a<.01)discard;float w=sin(vP.x*1.3+uT*1.7)*sin(vP.y*1.1-uT*1.3)+sin((vP.x+vP.y)*.7+uT*2.3);vec3 c=mix(vec3(.35,.62,.78),vec3(.05,.22,.45),smoothstep(.05,1.5,vD));c+=.06*w;c+=pow(max(0.,w*.5+.5),8.)*.15;gl_FragColor=vec4(c,a*.8);}'});
+  const m=new THREE.Mesh(geo,mat);m.frustumCulled=false;m.renderOrder=5;scene.add(m);
+  pm=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,7,12),new THREE.MeshBasicMaterial({color:0xffc72c}));pm.position.set(bas[0][0],groundTop+3.5,bas[0][1]);pm.visible=false;scene.add(pm);
+  const b=document.createElement('button');b.textContent='🔧 Bomba';b.onclick=()=>{pump=!pump;b.classList.toggle('on',pump);pm.visible=pump;};document.getElementById('flood').appendChild(b);
+  ready=true;
+}
+function step(rate){
+  const r=rate*DT,N=nx*nz,wet=rate>2e-5;
+  for(let k=0;k<N;k++)if(!B[k]){const st=ST[k],dry=(wet?(st?.0001:.0003):(st?.006:.012))*DT,d=D[k]+r*(1+EX[k])-dry;D[k]=d>0?d:0;}
+  if(pump)pc.forEach(k=>{D[k]=Math.max(0,D[k]-.08*DT);});
+  for(let i=0;i<nx;i++)D[i]*=1-.5*DT;for(let j=0;j<nz;j++)D[j*nx+nx-1]*=1-.5*DT; // saídas: sul e leste
+  const c=DT*AP*G/CS;
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i;
+    if(B[k]){Fr[k]=Fl[k]=Fu[k]=Fd[k]=0;continue;}
+    const s=T[k]+D[k];
+    Fr[k]=i<nx-1&&!B[k+1]?Math.max(0,Fr[k]*DAMP+c*(s-T[k+1]-D[k+1])):0;
+    Fl[k]=i>0&&!B[k-1]?Math.max(0,Fl[k]*DAMP+c*(s-T[k-1]-D[k-1])):0;
+    Fu[k]=j<nz-1&&!B[k+nx]?Math.max(0,Fu[k]*DAMP+c*(s-T[k+nx]-D[k+nx])):0;
+    Fd[k]=j>0&&!B[k-nx]?Math.max(0,Fd[k]*DAMP+c*(s-T[k-nx]-D[k-nx])):0;
+    const out=(Fr[k]+Fl[k]+Fu[k]+Fd[k])*DT,vol=D[k]*CS*CS;
+    if(out>vol&&out>0){const f=vol/out;Fr[k]*=f;Fl[k]*=f;Fu[k]*=f;Fd[k]*=f;}}
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const k=j*nx+i;if(B[k])continue;
+    const inn=(i>0?Fr[k-1]:0)+(i<nx-1?Fl[k+1]:0)+(j>0?Fu[k-nx]:0)+(j<nz-1?Fd[k+nx]:0);
+    const v=D[k]+DT*(inn-Fr[k]-Fl[k]-Fu[k]-Fd[k])/(CS*CS);D[k]=v>0?v:0;}
+}
+const pt=window.tick;let ts=0;
+window.tick=function(t){pt&&pt(t);if(!ready)return;
+  const rt=RAIN[wTarget]||0;rEff+=(rt-rEff)*.015;if(rt===0&&rEff<2e-5)rEff=0;for(let s=0;s<SUB;s++)step(rEff);
+  let mx=0,wet=0,tot=0;const N=nx*nz;
+  for(let k=0;k<N;k++){if(B[k])continue;const d=D[k];pos[k*3+1]=groundTop+.06+Math.min(d,2.5)*1.2;aD[k]=d;tot++;if(d>.05)wet++;if(d>mx)mx=d;}
+  for(let q=0;q<bc.length;q++){const k=bc[q],i=k%nx;let m=0;if(i<nx-1&&!B[k+1])m=Math.max(m,D[k+1]);if(i>0&&!B[k-1])m=Math.max(m,D[k-1]);if(k+nx<N&&!B[k+nx])m=Math.max(m,D[k+nx]);if(k-nx>=0&&!B[k-nx])m=Math.max(m,D[k-nx]);aD[k]=m;pos[k*3+1]=groundTop+.06+Math.min(m,2.5)*1.2;}
+  geo.attributes.position.needsUpdate=true;geo.attributes.aD.needsUpdate=true;mat.uniforms.uT.value=t;
+  info={wet:wet,tot:tot,mx:mx};stat='máx '+Math.round(mx*100)+' cm · '+Math.round(wet/tot*100)+'% alagado';};
+window.simStatus=()=>stat;
+window.simFloodInfo=()=>info; // {wet: nº de células com >5 cm de água, tot, mx: profundidade máxima}
+// distância (m) desde (x,z) até à célula alagada (>thr) mais próxima, até ao raio R; devolve R se não houver água perto
+window.simWetDist=(x,z,R,thr)=>{if(!ready)return R;const ci=Math.round((x-x0)/CS),cj=Math.round((z-z0)/CS),rc=Math.ceil(R/CS);let best=R;
+  for(let j=Math.max(0,cj-rc);j<=Math.min(nz-1,cj+rc);j++)for(let i=Math.max(0,ci-rc);i<=Math.min(nx-1,ci+rc);i++){const k=j*nx+i;if(B[k]||D[k]<=thr)continue;const d=Math.hypot((i-ci)*CS,(j-cj)*CS);if(d<best)best=d;}
+  return best;};
+window.simEdgeDepth=(ax,az,bx,bz)=>{if(!ready)return 0;let m=0;const n=Math.min(80,Math.max(1,Math.ceil(Math.hypot(bx-ax,bz-az)/(CS*.5))));for(let s=0;s<=n;s++){const i=Math.round((ax+(bx-ax)*s/n-x0)/CS),j=Math.round((az+(bz-az)*s/n-z0)/CS);if(i<0||j<0||i>=nx||j>=nz)continue;const d=D[j*nx+i];if(d>m)m=d;}return m;};
+})();
+</script>
+<script>
+// ===== EVACUAÇÃO: zonas seguras + rotas alternativas por ponto de partida (lógica DETERMINÍSTICA; a IA só explica/sugere) =====
+(function(){
+// Zonas seguras DINÂMICAS: cada cruzamento é candidato; só conta como zona segura se, neste momento, não houver água (>5 cm) a menos de MARGEM metros.
+const COR=[0x3ddc97,0xffc72c,0xff8a3d],LIM_AGUA=.05,MARGEM=22,MARG_MAX=60;
+let me=null,M=null,flood=false,zones=[],start=null,pick=false,sig='',lastC=0,lastT=0,routes=[],drawn=[],poly=null,mv=0,mover,smark;
+const depth=(x,z)=>window.simEdgeDepth?simEdgeDepth(x,z,x,z):0;
+// Serviço de notificações modular (WhatsApp/SMS/Push ainda NÃO ligados)
+const NotificationService={prov:{},register(n,p){this.prov[n]=p;},send(msg,ch){(ch||['push']).forEach(c=>(this.prov[c]||{send:m=>console.log('[SIMULADO]',m)}).send(msg));}};
+['whatsapp','sms','push'].forEach(n=>NotificationService.register(n,{send:m=>console.log('['+n+' simulado]',m)}));
+// Camada de IA (futura): recebe o estado, NÃO altera rotas nem controla nada
+const AI={endpoint:null, // ex.: '/api/ai/ask' quando o backend existir
+  snapshot(){return{chuva:wTarget,partida:start&&{col:start.c,linha:start.r,prof_m:+depth(start.x,start.z).toFixed(2)},
+    vias_bloqueadas:M?M.edges.filter(e=>e.blocked).length:0,vias_alagadas:M?M.edges.filter(e=>(e.dep||0)>.2).length:0,
+    ha_cheia:flood,zonas_seguras:zones.filter(z=>z.safe).map(z=>({nome:z.nome,margem_m:Math.round(z.marg)})),rotas:routes.map((o,i)=>({n:i+1,zona:o.z.nome,metros:Math.round(o.r.len),risco:o.risk}))};},
+  async explain(){const s=this.snapshot();
+    if(this.endpoint){try{const r=await fetch(this.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado:s,pergunta:'Explique a melhor rota de evacuação'})});return (await r.json()).texto;}catch(e){}}
+    if(!s.rotas.length)return'Sem rota de evacuação disponível a partir deste ponto. Procure o ponto mais alto, evite vias alagadas e aguarde equipas de emergência. [IA não ligada — texto por regras]';
+    const a=s.rotas[0];return'Melhor opção: '+a.zona+' ('+a.metros+' m, risco '+a.risco+'). '+(s.rotas.length>1?'Alternativas: '+s.rotas.slice(1).map(r=>r.zona+' ('+r.metros+' m)').join('; ')+'. ':'')+'Vias alagadas: '+s.vias_alagadas+', bloqueadas: '+s.vias_bloqueadas+'. [IA não ligada — texto por regras]';}};
+window.SmartCityAI=AI;window.NotificationService=NotificationService;
+let lastAlertKey='',lastAlertAt=0,alertedFlood=false;
+const ab=document.createElement('div');ab.className='box';ab.style.cssText='position:fixed;top:70px;left:14px;right:14px;max-width:520px;z-index:26;padding:10px 14px;font-size:13px;line-height:1.45;border-color:#d8232a;display:none';ab.onclick=()=>ab.style.display='none';document.body.appendChild(ab);
+const trat=()=>window.USER&&USER.primeiro?'Sr(a). '+USER.primeiro:'Caro(a) utilizador(a)';
+function autoAlert(){const U=window.USER;if(!U||!U.ready||!U.tel)return;
+  const o=routes[0],key=!flood?'ok':o?(o.r.len<1?'seg:'+o.z.local:'rota:'+o.z.nome):'sem';
+  if(key===lastAlertKey)return;
+  if(!flood&&!alertedFlood){lastAlertKey=key;return;}
+  const now=Date.now();if(flood&&now-lastAlertAt<45000)return;
+  lastAlertKey=key;lastAlertAt=now;let m;
+  if(!flood){alertedFlood=false;m=trat()+', a situação normalizou: já não há alagamento. Mantenha-se atento(a) aos avisos.';}
+  else{alertedFlood=true;m=trat()+', ALERTA DE CHEIA: '+(o?(o.r.len<1?'o(a) senhor(a) já está numa zona segura ('+o.z.local+'); permaneça aí.':'evacue pela Rota 1 até '+o.z.nome+' (~'+Math.round(o.r.len)+' m).'):'sem rota segura — dirija-se ao ponto mais alto e aguarde as equipas de emergência.');}
+  NotificationService.send('→ '+U.tel+' | '+m,['whatsapp','sms','push']);
+  if(!(window.floodChatNote&&floodChatNote('📣 Alerta enviado para '+U.tel+' (simulado).'))){ab.style.borderColor=flood?'#d8232a':'#3ddc97';ab.innerHTML='📣 <b>Alerta automático</b> enviado para '+U.tel+' <i style="color:#8fa39c">(simulado)</i><br>'+m+' <small style="color:#8fa39c">· toque para fechar</small>';ab.style.display='block';}
+  const eo=document.getElementById('eo');if(eo)eo.textContent='📣 Alerta enviado automaticamente para '+U.tel+'.';}
+
+const dock=document.getElementById('dock'),box=document.createElement('div');box.className='box';box.style.cssText='padding:10px 12px;font-size:12px;line-height:1.5';
+box.innerHTML='<div id="eh" style="cursor:pointer"><b>🚨 Evacuação</b> <span id="es" style="color:#8fa39c"></span></div><div id="eb"><div id="er" style="margin:6px 0"></div><div style="display:flex;gap:6px;margin:6px 0">📱<input id="eTel" class="mki" style="flex:1" inputmode="tel" placeholder="O seu número para alertas" autocomplete="tel"><button id="eTelOk">Guardar</button></div><div><button id="bS">📍 Marcar onde estou</button> <button id="bA">📣 Reenviar alerta</button> <button id="bI">💬 Conversa</button></div><div id="eo" style="margin-top:6px;color:#b9c9c3"></div></div>';
+dock.prepend(box);const $=id=>document.getElementById(id);
+$('eh').onclick=()=>{const b=$('eb');b.style.display=b.style.display==='none'?'block':'none';};
+$('bS').onclick=()=>{pick=!pick;$('bS').classList.toggle('on',pick);$('eo').textContent=pick?'Toque no mapa para definir onde está.':'';};
+$('bA').onclick=()=>{if(!flood){$('eo').textContent='Sem alagamento neste momento: não há alerta a enviar.';return;}lastAlertKey='';lastAlertAt=0;autoAlert();};
+$('bI').onclick=()=>window.openFloodChat&&openFloodChat(true);
+const eT=$('eTel');if(eT){eT.value=(window.USER&&USER.tel)||'';
+  window.addEventListener('scm-user',()=>{eT.value=USER.tel||'';});
+  $('eTelOk').onclick=()=>{const v=window.setUserTel&&setUserTel(eT.value);$('eo').textContent=v?'📱 Número guardado: '+v+'. Os alertas serão enviados automaticamente.':'Número inválido. Exemplo: 84 123 4567.';if(v){eT.value=v;lastAlertKey='';lastAlertAt=0;}};}
+
+const prev=window.onCityReady;
+window.onCityReady=function(){prev&&prev();M=window.MOB;
+  M.nodes.forEach(n=>{let b=null,bd=1e9;pois.forEach(p=>{const q=Math.hypot(p.centro.x-n.x,p.centro.z-n.z);if(q<bd){bd=q;b=p;}});
+    const local=b&&bd<90?'perto de '+b.nome:'cruzamento C'+(n.c+1)+'·L'+(n.r+1);
+    const mat=new THREE.MeshBasicMaterial({color:0x3ddc97,transparent:true,opacity:.4,side:THREE.DoubleSide});
+    const g=new THREE.Mesh(new THREE.CircleGeometry(13,32),mat);g.rotation.x=-Math.PI/2;g.position.set(n.x,groundTop+.5,n.z);g.visible=false;scene.add(g);
+    const d=document.createElement('div');d.className='lbl';d.style.color='#3ddc97';const l=new THREE.CSS2DObject(d);l.position.set(n.x,groundTop+14,n.z);l.visible=false;scene.add(l);
+    zones.push({n,x:n.x,z:n.z,local,nome:'Zona segura '+local,g,mat,l,div:d,safe:false,marg:MARG_MAX});});
+  start=M.nodes.find(n=>n.c===3&&n.r===1)||M.nodes[0];
+  smark=new THREE.Mesh(new THREE.SphereGeometry(2.2,16,16),new THREE.MeshBasicMaterial({color:0xd8232a}));scene.add(smark);
+  mover=new THREE.Mesh(new THREE.SphereGeometry(1.3,12,12),new THREE.MeshBasicMaterial({color:0xffffff}));mover.visible=false;scene.add(mover);};
+
+function proj(x,z){let best=null,bd=1e9;M.edges.forEach(e=>{const vx=e.b.x-e.a.x,vz=e.b.z-e.a.z,L2=vx*vx+vz*vz;if(!L2)return;const u=Math.max(0,Math.min(1,((x-e.a.x)*vx+(z-e.a.z)*vz)/L2)),px=e.a.x+vx*u,pz=e.a.z+vz*u,d=Math.hypot(x-px,z-pz);if(d<bd){bd=d;best={x,z,e,u,px,pz,d};}});return best;}
+window.EVAC={setPos(x,z){if(!M)return;me=proj(x,z);if(me){start=me.u<.5?me.e.a:me.e.b;sig='';}}};
+function edgeOf(a,b){return a.adj.find(e=>M.other(e,a)===b);}
+function compute(){
+  drawn.forEach(m=>{scene.remove(m);m.geometry.dispose();m.material.dispose();});drawn=[];routes=[];poly=null;
+  flood=window.simFloodInfo?simFloodInfo().wet>0:false; // só há análise de zonas quando existe água na cidade
+  zones.forEach(z=>{z.safe=flood&&z.marg>=MARGEM;});
+  zones.forEach(z=>{if(!z.safe)return;let r=null;
+    if(!me)r=start===z.n?{path:[start],len:0}:M.dij(start,z.n,false);
+    else{const ps={x:me.px,z:me.pz};
+      if(Math.hypot(me.x-z.x,me.z-z.z)<15)r={path:[ps],len:0};
+      else[[me.e.a,me.u*me.e.len],[me.e.b,(1-me.u)*me.e.len]].forEach(([n,c])=>{const q=n===z.n?{path:[n],len:0}:M.dij(n,z.n,false);if(!q)return;const L=c+q.len+me.d;if(!r||L<r.len)r={path:[ps].concat(q.path),len:L};});}
+    if(r)routes.push({z,r});});
+  routes.sort((a,b)=>a.r.len-b.r.len);
+  routes.forEach((o,i)=>{let mx=0;for(let k=0;k<o.r.path.length-1;k++){if(!o.r.path[k].adj)continue;const e=edgeOf(o.r.path[k],o.r.path[k+1]);if(e)mx=Math.max(mx,e.dep||0);}if(me&&o.r.len>=1)mx=Math.max(mx,me.e.dep||0);o.risk=mx<.05?'baixo':mx<.15?'médio':'alto';
+    if(o.r.path.length>1&&i<3){const pts=o.r.path.map(n=>new THREE.Vector3(n.x,groundTop+.9+i*.5,n.z)),cp=new THREE.CurvePath();
+      for(let k=0;k<pts.length-1;k++)cp.add(new THREE.LineCurve3(pts[k],pts[k+1]));
+      const m=new THREE.Mesh(new THREE.TubeGeometry(cp,pts.length*4,1.5-i*.35,8,false),new THREE.MeshBasicMaterial({color:COR[i],transparent:true,depthTest:false}));m.renderOrder=998-i;scene.add(m);drawn.push(m);}});
+  if(routes[0]&&routes[0].r.path.length>1){const p=routes[0].r.path.map(n=>[n.x,n.z]);let L=0;const cum=[0];for(let k=1;k<p.length;k++){L+=Math.hypot(p[k][0]-p[k-1][0],p[k][1]-p[k-1][1]);cum.push(L);}poly={p,cum,L};}
+  // todas as zonas seguras aparecem a verde (fraco); as 3 melhores rotas levam etiqueta e cor forte
+  const top=new Set(routes.slice(0,3).map(o=>o.z));
+  zones.forEach(z=>{z.g.visible=z.safe;z.mat.opacity=top.has(z)?.45:.16;z.l.visible=top.has(z);z.div.innerHTML=top.has(z)?'ZONA SEGURA<br><span>'+z.local+'</span>':'';});
+  render();
+}
+function render(){
+  const d=me?depth(me.x,me.z):start?depth(start.x,start.z):0,ns=zones.filter(z=>z.safe).length,
+  st=!flood?'SEGURO':!routes.length?'PERIGO':d<.05?'SEGURO':d<.2?'ATENÇÃO':'PERIGO';
+  $('es').innerHTML='· partida: <b style="color:'+(st==='SEGURO'?'#3ddc97':st==='ATENÇÃO'?'#ffc72c':'#ff6b6b')+'">'+st+'</b> ('+d.toFixed(2)+' m de água)';
+  $('er').innerHTML=!flood?'<div style="color:#3ddc97">✅ Sem alagamento: não há zonas de risco. As zonas seguras são definidas a partir de onde houver água.</div>'
+    :routes.length?routes.slice(0,3).map((o,i)=>'<div><span style="color:#'+COR[i].toString(16).padStart(6,'0')+'">●</span> '+(i?'Alt. '+i:'<b>Rota 1 (recomendada)</b>')+' → '+o.z.local.replace('perto de ','')+' · '+(o.r.len<1?'já está nesta zona':Math.round(o.r.len)+' m · ≈ '+Math.round(o.r.len/1.4/60*10)/10+' min a pé')+' · risco '+o.risk+'</div>').join('')
+    :'<div style="color:#ff6b6b">⛔ '+(ns?'Nenhuma zona segura acessível a partir deste ponto.':'Nenhuma zona segura neste momento: a água está demasiado espalhada.')+'</div>';
+  if(flood)$('er').innerHTML+='<div style="color:#8fa39c;margin-top:4px">Toque em qualquer ponto do mapa para mudar a sua posição: as rotas atualizam-se sozinhas.</div>';
+}
+const og=window.onGroundClick;
+window.onGroundClick=function(ray){
+  if(!M)return og&&og(ray);
+  if(!pick&&!(flood&&!(M.picking&&M.picking())))return og&&og(ray);
+  const p=new THREE.Vector3();if(!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-groundTop),p))return;
+  pick=false;$('bS').classList.remove('on');
+  if(window.Mercado)Mercado.setUser(p.x,p.z,'Local escolhido');else EVAC.setPos(p.x,p.z);
+  $('eo').textContent='📍 Posição atualizada.';};
+const pt=window.tick;
+window.tick=function(t){pt&&pt(t);if(!M||!start)return;
+  smark.visible=!(window.Mercado&&Mercado.hasUser&&Mercado.hasUser());smark.position.set(me?me.x:start.x,groundTop+3,me?me.z:start.z);
+  if(t-lastC>.5){lastC=t;zones.forEach(z=>{z.marg=window.simWetDist?simWetDist(z.x,z.z,MARG_MAX,LIM_AGUA):MARG_MAX;});
+    const fl=window.simFloodInfo?+(simFloodInfo().wet>0):0,s=(me?Math.round(me.x)+'_'+Math.round(me.z):start.c+'_'+start.r)+'|'+fl+'|'+M.edges.map(e=>+M.passable(e)).join('')+'|'+zones.map(z=>+(z.marg>=MARGEM)).join('');
+    if(s!==sig){sig=s;compute();}else render();autoAlert();}
+  const dt=Math.min(t-lastT,.1);lastT=t;
+  if(poly){mover.visible=true;mv=(mv+dt*9)%(poly.L+10);const m=Math.min(mv,poly.L);let k=1;while(k<poly.p.length-1&&poly.cum[k]<m)k++;
+    const f=(m-poly.cum[k-1])/((poly.cum[k]-poly.cum[k-1])||1),a=poly.p[k-1],b=poly.p[k];mover.position.set(a[0]+(b[0]-a[0])*f,groundTop+2,a[1]+(b[1]-a[1])*f);}else if(mover)mover.visible=false;};
+})();
+</script>
+<script>
+// ===== SEMÁFOROS AO VIVO — sobrepostos aos do GLB (que é estático) =====
+// Cada cruzamento em SEM_LIVE ganha um controlador de 2 fases (Norte–Sul / Este–Oeste):
+//   verde → amarelo → tudo vermelho → fase oposta.
+// As lâmpadas 3D são desenhadas SOBRE as cabeças originais do GLB (as lâmpadas estáticas ficam escondidas).
+// Os carros da mobilidade obedecem a estas luzes (param na linha de paragem).
+// SIMULADO. Futuro: SEM_API → Flask → Python → porta serial → Arduino → semáforo físico (DIGITAL → FÍSICO).
+(function(){
+const SEM_LIVE=['StopLights','StopLights3']; // cruzamentos do GLB a tornar "vivos" (editável: StopLights, StopLights1 … StopLights6)
+const SEM_API=window.SC_API+'/api/semaphores';                          // ex.: 'http://localhost:5000/api/semaphores'  (POST {mode})
+const G=5,Y=1.5,AR=1.0,LOCK_S=15;             // segundos: verde (normal, alterna N–S / E–O), amarelo, tudo-vermelho, TRANCAR em vermelho
+const ON={red:0xff2a2a,yellow:0xffc72c,green:0x3ddc97},OFF={red:0x3a0f0f,yellow:0x3a300c,green:0x0c3a2a};
+const ctls=[];let sel=null,ring=null,ready=false,lastUI=0,lastT=0,camIdx=0;
+const tmp=new THREE.Vector3();
+
+// ---------- controlador de um cruzamento (máquina de estados) ----------
+function Ctl(id,name,owner,timer){
+  const c={id,name,mode:'auto',owner,stage:'green',timer,heads:[],lockLeft:null,
+    // estado da luz para um eixo: 'green' | 'yellow' | 'red' | 'flash' | 'off'
+    state(ax){
+      if(c.mode==='flash')return Math.floor(performance.now()/500)%2?'off':'flash';
+      if(ax!==c.owner)return 'red';
+      return c.stage==='green'?'green':c.stage==='yellow'?'yellow':'red';
+    },
+    tick(dt){
+      if(c.mode==='flash')return;
+      c.timer+=dt;const m=c.mode,hold=(m==='NS'||m==='EW');
+      // TRANCADO: os 15 s só contam quando o cruzamento já está todo em vermelho; depois volta ao automático
+      if(c.lockLeft!=null&&c.stage==='allred'&&m==='red'){c.lockLeft-=dt;if(c.lockLeft<=0){c.lockLeft=null;c.cmd('auto');}}
+      if(c.stage==='green'){
+        if((m==='auto'&&c.timer>=G)||m==='red'||(hold&&c.owner!==m)){c.stage='yellow';c.timer=0;}
+      }else if(c.stage==='yellow'){
+        if(c.timer>=Y){c.stage='allred';c.timer=0;}
+      }else if(c.timer>=AR&&m!=='red'){
+        c.owner=hold?m:(c.owner==='NS'?'EW':'NS');c.stage='green';c.timer=0;
+      }
+    },
+    remaining(){
+      if(c.mode==='flash'||c.mode==='red')return null;
+      if(c.stage==='green')return c.mode==='auto'?G-c.timer:null;
+      if(c.stage==='yellow')return Y-c.timer;
+      return AR-c.timer;
+    },
+    lock(){c.cmd('red',{lock_seconds:LOCK_S});c.lockLeft=LOCK_S;},   // trancar 15 s em vermelho
+    cmd(m,extra){
+      if(!extra)c.lockLeft=null;                                    // qualquer outro botão cancela o trancamento
+      const was=c.mode;c.mode=m;
+      if(was==='flash'&&m!=='flash'){c.stage='allred';c.timer=0;}
+      if(m==='auto'&&c.stage==='green')c.timer=0;
+      if(SEM_API)fetch(SEM_API+'/'+c.id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({mode:m},extra||{}))}).catch(()=>{});
+    }};
+  return c;
+}
+
+// ---------- lâmpadas 3D sobre as cabeças do GLB ----------
+function glowTex(){const cv=document.createElement('canvas');cv.width=cv.height=64;const x=cv.getContext('2d'),g=x.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.25,'rgba(255,255,255,.55)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,64,64);return new THREE.CanvasTexture(cv);}
+
+function buildHeads(obj,ctl,tex){
+  obj.updateMatrixWorld(true);
+  const lens=[],rings=[];
+  obj.traverse(o=>{
+    if(!o.isMesh)return;
+    if(/^polySurface739_/.test(o.name))lens.push({o,b:new THREE.Box3().setFromObject(o)});       // lente (lâmpada) estática
+    else if(/^polySurface262_/.test(o.name))rings.push(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3())); // aro/viseira
+  });
+  const groups=[];
+  lens.forEach(L=>{L.c=L.b.getCenter(new THREE.Vector3());L.s=L.b.getSize(new THREE.Vector3());
+    const g=groups.find(g=>Math.abs(g[0].c.x-L.c.x)<.2&&Math.abs(g[0].c.z-L.c.z)<.2);g?g.push(L):groups.push([L]);});
+  groups.forEach(g=>{
+    if(g.length!==3)return;
+    g.sort((a,b)=>b.c.y-a.c.y);                                   // topo = vermelho, meio = amarelo, baixo = verde
+    const L0=g[0],ax=L0.s.x<L0.s.z?'x':'z';                        // eixo fino da lente = direção para onde a cabeça aponta
+    const rb=rings.find(r=>Math.abs(r.y-L0.c.y)<.1&&Math.abs(r.x-L0.c.x)<.5&&Math.abs(r.z-L0.c.z)<.5);
+    const sign=rb?(L0.c[ax]>=rb[ax]?1:-1):1;
+    const n=new THREE.Vector3(ax==='x'?sign:0,0,ax==='z'?sign:0);
+    const head={axis:ax==='x'?'EW':'NS',lamps:[],last:''};
+    ['red','yellow','green'].forEach((col,i)=>{
+      const L=g[i];L.o.visible=false;                              // esconde a lâmpada estática do GLB
+      const p=L.c.clone().addScaledVector(n,.045);
+      const disc=new THREE.Mesh(new THREE.CircleGeometry(.17,20),new THREE.MeshBasicMaterial({color:OFF[col]}));
+      disc.position.copy(p);disc.lookAt(p.clone().add(n));scene.add(disc);
+      const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:ON[col],transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false}));
+      glow.scale.setScalar(1.5);glow.position.copy(p).addScaledVector(n,.3);glow.visible=false;scene.add(glow);
+      head.lamps.push({col,disc,glow,p,n});
+    });
+    ctl.heads.push(head);
+  });
+}
+
+function paint(c){
+  c.heads.forEach(h=>{
+    const st=c.state(h.axis);
+    h.lamps.forEach(l=>{
+      const lit=(st==='red'&&l.col==='red')||(st==='yellow'&&l.col==='yellow')||(st==='flash'&&l.col==='yellow')||(st==='green'&&l.col==='green');
+      if(h.last!==st){l.disc.material.color.setHex(lit?ON[l.col]:OFF[l.col]);l.glow.visible=lit;}
+      if(lit){tmp.copy(camera.position).sub(l.p).normalize();l.glow.material.opacity=.85*Math.max(0,tmp.dot(l.n)); } // brilho só visto pela frente
+    });
+    h.last=st;
+  });
+}
+
+// ---------- etiqueta + painel ----------
+const DOT=s=>s==='green'?'🟢':(s==='yellow'||s==='flash')?'🟡':s==='off'?'⚫':'🔴';
+const TXT={green:'🟢 Verde',yellow:'🟡 Amarelo',red:'🔴 Vermelho',flash:'🟡 Amarelo intermitente',off:'🟡 Amarelo intermitente'};
+function label(c){
+  const r=c.remaining();
+  const lk=c.lockLeft!=null?' · 🔒 '+(c.stage==='allred'?Math.max(0,Math.ceil(c.lockLeft))+'s':'a fechar…'):'';
+  c.txt.innerHTML='<b>'+c.id+'</b> N–S '+DOT(c.state('NS'))+' · E–O '+DOT(c.state('EW'))+(r!=null?' · '+Math.max(0,Math.ceil(r))+'s':'')+(c.mode!=='auto'&&c.lockLeft==null?' · manual':'')+lk;
+  c.lkb.disabled=c.lockLeft!=null;
+}
+function openCtl(c){
+  sel=c;pSel=null;if(hi){scene.remove(hi);hi=null;}
+  panel.style.display='block';
+  const B=[['auto','Auto'],['NS','Verde N–S'],['EW','Verde E–O'],['red','Tudo vermelho'],['flash','Amarelo int.']];
+  panel.innerHTML='<div id="semLive" class="t">semáforo · ao vivo</div><h2>'+c.id+' · '+c.name+'</h2>'
+    +'<p>Norte–Sul: <b id="sl_NS"></b><br>Este–Oeste: <b id="sl_EW"></b><br><span id="sl_m" style="color:#8fa39c"></span></p>'
+    +'<p><button id="sb_lock" style="width:100%;padding:11px;font-size:13px;font-weight:700;border-color:#d8232a" onclick="SEMLIVE.lock()"></button>'
+    +'<span id="sl_bar" style="display:block;height:5px;margin-top:6px;border-radius:3px;background:#2a1414"><span id="sl_fill" style="display:block;height:100%;width:0;border-radius:3px;background:#d8232a"></span></span></p>'
+    +'<p style="display:flex;gap:6px;flex-wrap:wrap">'+B.map(b=>'<button id="sb_'+b[0]+'" onclick="SEMLIVE.cmd(\''+b[0]+'\')">'+b[1]+'</button>').join('')+'</p>'
+    +'<div class="sim">SIMULADO — sem Arduino ligado · os carros obedecem a estas luzes</div>';
+  updSel();
+}
+function updSel(){
+  if(!sel)return;const $=id=>document.getElementById(id);if(!$('sl_NS'))return;
+  $('sl_NS').textContent=TXT[sel.state('NS')];$('sl_EW').textContent=TXT[sel.state('EW')];
+  const r=sel.remaining();
+  const L=sel.lockLeft,closing=L!=null&&sel.stage!=='allred';
+  $('sl_m').textContent=L!=null?(closing?'Trancado: a fechar (amarelo → vermelho)…':'🔒 Trancado em vermelho · volta ao normal em '+Math.max(0,Math.ceil(L))+' s')
+    :(sel.mode==='auto'?'Modo automático (verde '+G+' s, alterna)':'Modo manual')+(r!=null?' · muda em '+Math.max(0,Math.ceil(r))+' s':'');
+  const b=$('sb_lock');b.disabled=L!=null;b.textContent=L!=null?(closing?'🔒 A fechar…':'🔒 Trancado · '+Math.max(0,Math.ceil(L))+' s'):'🔒 Trancar '+LOCK_S+' s em vermelho';
+  $('sl_fill').style.width=(L!=null&&!closing?Math.max(0,L/LOCK_S*100):0)+'%';
+  ['auto','NS','EW','red','flash'].forEach(k=>$('sb_'+k)&&$('sb_'+k).classList.toggle('on',sel.mode===k&&(k!=='red'||L==null)));
+}
+window.SEMLIVE={ctls,open:openCtl,cmd:m=>{if(sel){sel.cmd(m);updSel();}},lock:()=>{if(sel){sel.lock();updSel();}}};
+// compatibilidade com o comando antigo (commandSemaphore(i, modo))
+const oldCmd=window.commandSemaphore;
+window.commandSemaphore=function(i,m){const c=sems[i]&&sems[i].ctl;if(c)c.cmd(m==='yellow'?'flash':m==='green'?'NS':m);else oldCmd&&oldCmd(i,m);};
+
+// ---------- arranque ----------
+const prev=window.onCityReady;
+window.onCityReady=function(){prev&&prev();init();};
+function init(){
+  ring=new THREE.Mesh(new THREE.RingGeometry(11,12.5,48),new THREE.MeshBasicMaterial({color:0xffc72c,transparent:true,opacity:.9,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2;ring.visible=false;scene.add(ring);
+  const tex=glowTex(),M=window.MOB;
+  SEM_LIVE.forEach(nm=>{
+    const obj=city.getObjectByName(nm);if(!obj)return;
+    const cen=new THREE.Box3().setFromObject(obj).getCenter(new THREE.Vector3());
+    let si=-1,bd=1e9;sems.forEach((s,i)=>{const d=Math.hypot(s.pos.x-cen.x,s.pos.z-cen.z);if(d<bd){bd=d;si=i;}});
+    if(si<0||bd>40||sems[si].ctl)return;
+    let nd=null;if(M){bd=1e9;M.nodes.forEach(n=>{const d=Math.hypot(n.x-cen.x,n.z-cen.z);if(d<bd){bd=d;nd=n;}});}
+    const k=ctls.length,c=Ctl('S'+(k+1),nd?'cruzamento C'+(nd.c+1)+'·L'+(nd.r+1):nm,k%2?'EW':'NS',k*5); // 2.º cruzamento desfasado
+    c.centre=cen;c.si=si;sems[si].ctl=c;ctls.push(c);
+    buildHeads(obj,c,tex);
+    const d=document.createElement('div');d.className='lbl';
+    d.style.cssText='pointer-events:auto;cursor:pointer;background:rgba(10,18,16,.85);border:1px solid #2c5248;border-radius:6px;padding:3px 7px;font-size:10.5px;margin-top:-6px';
+    d.onclick=()=>{openCtl(c);};
+    const tx=document.createElement('span'),kb=document.createElement('button');
+    kb.textContent='🔒 '+LOCK_S+'s';kb.title='Trancar em vermelho '+LOCK_S+' s';kb.style.cssText='margin-left:6px;padding:2px 6px;font-size:10.5px';
+    kb.onclick=e=>{e.stopPropagation();openCtl(c);SEMLIVE.lock();};
+    d.appendChild(tx);d.appendChild(kb);c.txt=tx;c.lkb=kb;
+    const l=new THREE.CSS2DObject(d);l.position.set(cen.x,groundTop+13,cen.z);scene.add(l);c.lab=d;
+  });
+  document.getElementById('ns').textContent=sems.length+' ('+ctls.length+' ao vivo)';
+  const b=document.createElement('button');b.textContent='🚦 Semáforos';
+  b.onclick=()=>{if(!ctls.length)return;const c=ctls[camIdx++%ctls.length];openCtl(c);fly={to:c.centre.clone(),t:0};};
+  document.getElementById('flood').appendChild(b);
+  ready=ctls.length>0;
+}
+
+// ---------- loop (corre ANTES da mobilidade para os carros verem o estado atual) ----------
+const pt=window.tick;
+window.tick=function(t){
+  const dt=Math.min(Math.max(t-lastT,0),.1);lastT=t;
+  if(ready){ctls.forEach(c=>c.tick(dt));ctls.forEach(paint);}
+  pt&&pt(t);
+  if(!ready)return;
+  if(t-lastUI>.2){lastUI=t;ctls.forEach(label);
+    if(sel){if(document.getElementById('semLive'))updSel();else sel=null;}  // outro painel abriu → deixa de seguir
+    ring.visible=!!sel;if(sel)ring.position.set(sel.centre.x,groundTop+.6,sel.centre.z);}
+};
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+// ===== SMART BANK v2 — 2 sensores (entrada/saída) + senha por QR + aviso por WhatsApp =====
+// Modelo (só os 2 contadores e as senhas mandam; o resto é derivado):
+//   Dentro = Entraram (sensor 1) − Saíram (sensor 2)
+//   Senha  = emitida pelo QR; começa FORA do banco; passa a DENTRO quando o sensor 1 dispara
+//   Fila   = senhas dentro além dos balcões ocupados · Atendimento concluído = sensor 2 dispara
+//   Aviso WhatsApp: quando faltarem NOTIFY_AT pessoas à frente da senha (e "é a sua vez")
+// Sensores reais (mão à frente do HC-SR04):  Arduino → serial → Python → Flask → SENSOR_API
+//   Contrato:  GET SENSOR_API?after=<id>  →  {"events":[{"id":12,"bank":0,"door":"in"|"out"}]}
+// WhatsApp real:  POST WHATSAPP_API  {"to":"+25884…","text":"…"}   (ligar ao bot.js do projeto)
+// Teste na consola:  SmartBank.pulse(0,'in')  /  SmartBank.pulse(0,'out')
+(function(){
+const SENSOR_API=window.SC_API+'/api/bank/events';     // ex.: 'http://localhost:5000/api/bank/events'
+const WHATSAPP_API=window.SC_API+'/api/whatsapp';   // ex.: 'http://localhost:3000/send'  (sem isto, o aviso é só mostrado no ecrã)
+let FILA_URL=null;fetch(window.SC_API+'/api/config').then(r=>r.json()).then(j=>{if(j.fila_url)FILA_URL=j.fila_url;}).catch(()=>{});       // página de registo para o QR (ex.: 'http://192.168.1.10:5000/fila'); sem isto, QR de demonstração
+const BALCOES=2;           // balcões a atender em simultâneo
+const MIN_ATEND=3;         // minutos por cliente em cada balcão (estimativa mostrada)
+const NOTIFY_AT=4;         // avisar quando faltarem tantas pessoas à frente
+const T_ATEND=[14,26];     // segundos de atendimento na simulação (tempo acelerado)
+const T_CHEGADA=[3,8];     // segundos entre chegadas na simulação
+const CAP=22;              // máximo de senhas pendentes na simulação
+const H=3.2, PRE=5;        // altura visual dos clientes (exagerada) · clientes já dentro ao arrancar
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- núcleo (sem 3D): contadores, senhas e fila ----------
+const Core={
+  make(pre){const f={in:0,out:0,ign:0,seq:0,t:[]};for(let i=0;i<pre;i++){Core.pulse(f,'in').sim=true;}return f;},
+  emit(f,nome,tel){const k={n:++f.seq,nome:nome||'',tel:tel||'',st:'fora',rem:rnd(T_ATEND[0],T_ATEND[1]),notif:0,log:[]};f.t.push(k);return k;},
+  // sensor 1: promove a senha indicada (ou a mais antiga ainda fora); sem senha prévia, emite uma à porta
+  // sensor 2: sai a senha indicada (ou a mais antiga dentro); com o banco vazio a leitura é ignorada
+  pulse(f,door,id){
+    if(door==='in'){let k=id!=null?f.t.find(x=>x.n===id&&x.st==='fora'):f.t.find(x=>x.st==='fora');
+      if(!k)k=Core.emit(f,'','');k.st='dentro';k.leaving=false;f.in++;return k;}
+    if(door==='out'){const p=f.t.filter(x=>x.st==='dentro');if(!p.length){f.ign++;return null;}
+      const k=(id!=null&&p.find(x=>x.n===id))||p[0];f.t.splice(f.t.indexOf(k),1);f.out++;return k;}
+    return null;},
+  presentes:f=>f.t.filter(k=>k.st==='dentro'),
+  dentro:f=>f.t.filter(k=>k.st==='dentro').length,
+  fora:f=>f.t.filter(k=>k.st==='fora').length,
+  atend:f=>Math.min(BALCOES,Core.dentro(f)),
+  fila:f=>Math.max(0,Core.dentro(f)-BALCOES),
+  aFrente:(f,k)=>f.t.filter(x=>x.n<k.n).length,
+  espera:ahead=>Math.floor(ahead/BALCOES)*MIN_ATEND,
+  stage(f,k){if(k.st==='fora')return 'fora';return Core.presentes(f).indexOf(k)<BALCOES?'atend':'espera';},
+  // simulação: os que estão nos balcões gastam tempo; ao terminar vão para a porta de saída
+  serve(f,dt){const done=[];Core.presentes(f).slice(0,BALCOES).forEach(k=>{if(k.leaving)return;k.rem-=dt;if(k.rem<=0){k.leaving=true;done.push(k);}});return done;}
+};
+
+function normTel(s){let d=String(s||'').replace(/[\s\-().]/g,'');
+  if(d.startsWith('+258'))d=d.slice(4);else if(d.startsWith('00258'))d=d.slice(5);else if(d.startsWith('258')&&d.length===12)d=d.slice(3);
+  return /^8[2-7]\d{7}$/.test(d)?'+258'+d:null;}
+const fmtTel=t=>t.slice(0,4)+' '+t.slice(4,6)+' '+t.slice(6,9)+' '+t.slice(9);
+
+let banks=[],M=null,walkers=[],pool=[],lastT=0,lastUI=0,auto=!SENSOR_API,srcOk=true,GB,GH,modal=null,toastEl=null,toastT=0;
+const COLS=[0xf2c14e,0x6fb7e9,0xe58b6d,0x9bd18b,0xd9a5e8,0xeeeeee],SKIN=[0x5a3a28,0x7a4f35,0x9a6a4a],DH=H*1.2;
+
+// ---------- clientes (figuras simples) ----------
+function person(){
+  let g=pool.pop();if(g){g.visible=true;return g;}
+  g=new THREE.Group();
+  const body=new THREE.Mesh(GB,new THREE.MeshLambertMaterial({color:COLS[Math.floor(Math.random()*COLS.length)]}));body.position.y=H*.31;
+  const head=new THREE.Mesh(GH,new THREE.MeshLambertMaterial({color:SKIN[Math.floor(Math.random()*SKIN.length)]}));head.position.y=H*.77;
+  g.add(body);g.add(head);scene.add(g);return g;}
+
+function walk(b,kind,fire,cosmetic){
+  const d=kind==='in'?b.din:b.dout,P=d.pos,n=b.n,tg=b.tg;
+  const at=(a,l)=>new THREE.Vector3(P.x+n.x*a+tg.x*l,groundTop,P.z+n.z*a+tg.z*l);
+  let path,cross;
+  if(kind==='in'){const l=rnd(-9,9);path=cosmetic?[at(6,0),at(0,0),at(-3,0)]:[at(26,l),at(6,0),at(0,0),at(-3,0)];cross=cosmetic?1:2;}
+  else{const l=rnd(-14,14);path=[at(-3,0),at(0,0),at(20,l*.6),at(32,l)];cross=1;}
+  const g=person();g.position.copy(path[0]);
+  walkers.push({g,path,i:1,cross,kind,fire:cosmetic?null:fire,b,v:rnd(4.5,6.5)});}
+
+// um pulso de sensor: atualiza contadores e acende o feixe
+function count(b,door,id){
+  const k=Core.pulse(b.f,door,id),d=door==='in'?b.din:b.dout;
+  d.flash=.7;d.last=performance.now();
+  b.msg=k?'':'Saída ignorada: banco vazio (sensor 2)';
+  return k;}
+// pulso vindo de fora (API / mão no sensor / consola): conta e mostra um cliente a atravessar
+function external(idx,door){const b=banks[idx];if(!b)return;const k=count(b,door);if(k)walk(b,door,null,true);}
+
+// ---------- WhatsApp (via NotificationService; real só com WHATSAPP_API) ----------
+function toast(m,modo){
+  if(!toastEl){toastEl=document.createElement('div');toastEl.className='box';
+    toastEl.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:64px;z-index:36;width:min(340px,calc(100% - 28px));overflow:hidden;display:none';
+    toastEl.innerHTML='<div style="background:#075e54;padding:6px 10px;font-size:12px"><b>WhatsApp</b> · SmartCity Moz</div><div class="wt" style="padding:10px;background:#0b141a;font-size:12.5px;line-height:1.5;white-space:pre-line"></div><div class="wm" style="padding:4px 10px 8px;background:#0b141a;font-size:10.5px"></div>';
+    document.body.appendChild(toastEl);}
+  toastEl.querySelector('.wt').textContent=m.text;
+  const wm=toastEl.querySelector('.wm');wm.style.color=modo==='enviado'?'#3ddc97':'#d98b8b';
+  wm.textContent=(modo==='enviado'?'Enviado para ':modo==='falhou'?'FALHOU o envio para ':'SIMULADO — nenhuma mensagem foi enviada para ')+fmtTel(m.to);
+  toastEl.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>toastEl.style.display='none',9000);}
+function registerWhatsApp(){
+  const NS=window.NotificationService;if(!NS)return;
+  NS.register('whatsapp',{send(m){
+    if(typeof m==='string'){console.log('[whatsapp simulado]',m);return;}
+    if(WHATSAPP_API){fetch(WHATSAPP_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:m.to,text:m.text})})
+      .then(r=>{if(!r.ok)throw 0;toast(m,'enviado');}).catch(()=>toast(m,'falhou'));}
+    else toast(m,'simulado');}});}
+function notify(b,k,tipo){
+  const a=Core.aFrente(b.f,k),e=Core.espera(a),nm=b.p.nome,hi=k.nome?'Olá, '+k.nome+'. ':'';
+  const text=tipo===0?'SmartCity Moz · '+nm+'\n'+hi+'Senha '+k.n+' registada. À sua frente: '+a+(a?' (≈ '+(e||'<'+MIN_ATEND)+' min)':'')+'. Pode sair do banco: avisamos quando faltarem '+NOTIFY_AT+' pessoas.'
+    :tipo===1?'SmartCity Moz · '+nm+'\n'+hi+'Senha '+k.n+': '+(a===1?'falta 1 pessoa':'faltam '+a+' pessoas')+' à sua frente (≈ '+(e||'<'+MIN_ATEND)+' min). Dirija-se ao banco agora.'
+    :'SmartCity Moz · '+nm+'\n'+hi+'Senha '+k.n+': é a sua vez! Dirija-se ao balcão.';
+  if(tipo>0)k.notif=tipo;k.log.push(['confirmação','aviso: faltam '+a,'é a sua vez'][tipo]);
+  if(window.NotificationService)window.NotificationService.send({to:k.tel,text,bank:b.idx,senha:k.n,tipo},['whatsapp']);}
+// só senhas registadas pelo utilizador (com número) recebem mensagem; os clientes simulados nunca
+function avisos(b){b.f.t.forEach(k=>{if(!k.tel||k.st!=='fora')return;const a=Core.aFrente(b.f,k);
+  if(a===0&&k.notif<2)notify(b,k,2);else if(a<=NOTIFY_AT&&k.notif<1)notify(b,k,1);});}
+
+// ---------- construção das portas e sensores ----------
+function segDist(px,pz,ax,az,bx,bz){const dx=bx-ax,dz=bz-az,l=dx*dx+dz*dz||1;let t=((px-ax)*dx+(pz-az)*dz)/l;t=Math.max(0,Math.min(1,t));return Math.hypot(px-(ax+dx*t),pz-(az+dz*t));}
+function roadDist(x,z){
+  if(M&&M.edges&&M.edges.length){let m=1e9;M.edges.forEach(e=>{const d=segDist(x,z,e.a.x,e.a.z,e.b.x,e.b.z);if(d<m)m=d;});return m;}
+  return Math.hypot(x,z);}
+function sameBox(a,b){return Math.abs(a.min.x-b.min.x)<.01&&Math.abs(a.max.x-b.max.x)<.01&&Math.abs(a.min.z-b.min.z)<.01&&Math.abs(a.max.z-b.max.z)<.01;}
+function blocked(x,z,own){return obst.some(o=>!sameBox(o,own)&&x>o.min.x&&x<o.max.x&&z>o.min.z&&z<o.max.z);}
+
+function makeDoor(b,kind,off,w){
+  const col=kind==='in'?0x3ddc97:0xff9d3d,css=kind==='in'?'#3ddc97':'#ff9d3d';
+  const g=new THREE.Group();
+  g.position.set(b.mid.x+b.n.x*.35+b.tg.x*off,groundTop,b.mid.z+b.n.z*.35+b.tg.z*off);
+  g.rotation.y=Math.atan2(b.n.x,b.n.z);
+  const pane=new THREE.Mesh(new THREE.BoxGeometry(w,DH,.25),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.4,depthWrite:false}));pane.position.y=DH/2;g.add(pane);
+  const beam=new THREE.Mesh(new THREE.BoxGeometry(w,.12,.12),new THREE.MeshBasicMaterial({color:0xff3b3b,transparent:true,opacity:.5}));beam.position.y=H*.5;g.add(beam);
+  const post=new THREE.Mesh(new THREE.BoxGeometry(.5,.9,.5),new THREE.MeshLambertMaterial({color:0x1b2a26}));post.position.set(w/2+.5,H*.5,0);g.add(post);
+  [-.15,.15].forEach(dx=>{const e=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.2,12),new THREE.MeshBasicMaterial({color:0xcfd8d5}));e.rotation.x=Math.PI/2;e.position.set(w/2+.5+dx,H*.5,.3);g.add(e);});
+  const el=document.createElement('div');el.className='lbl';
+  el.style.cssText='background:rgba(10,18,16,.88);border:1px solid '+css+';border-radius:6px;padding:2px 6px;font-size:10.5px';
+  const lab=new THREE.CSS2DObject(el);lab.position.set(0,DH+1.4,0);g.add(lab);
+  scene.add(g);
+  const pos=new THREE.Vector3();g.getWorldPosition(pos);
+  return {kind,g,pane,beam,el,pos,flash:0,last:null};}
+
+function build(p,idx){
+  const bx=p.box,c=p.centro,sx=bx.max.x-bx.min.x,sz=bx.max.z-bx.min.z;
+  const F=[{n:[1,0],m:[bx.max.x,c.z],len:sz},{n:[-1,0],m:[bx.min.x,c.z],len:sz},{n:[0,1],m:[c.x,bx.max.z],len:sx},{n:[0,-1],m:[c.x,bx.min.z],len:sx}];
+  F.forEach(f=>{f.s=roadDist(f.m[0],f.m[1])+(blocked(f.m[0]+f.n[0]*7,f.m[1]+f.n[1]*7,bx)?1e4:0);});
+  F.sort((a,b)=>a.s-b.s);const f=F[0];
+  const b={p,idx,n:new THREE.Vector3(f.n[0],0,f.n[1]),tg:new THREE.Vector3(-f.n[1],0,f.n[0]),mid:new THREE.Vector3(f.m[0],groundTop,f.m[1]),
+    f:Core.make(PRE),msg:'',next:rnd(1,3),my:null};
+  const along=Math.min(f.len*.22,10),w=Math.min(Math.max(f.len*.14,3),5.5);
+  b.din=makeDoor(b,'in',-along,w);b.dout=makeDoor(b,'out',along,w);
+  return b;}
+
+// ---------- simulação ----------
+function step(dt,t){
+  banks.forEach(b=>{
+    if(auto){
+      b.next-=dt;
+      if(b.next<=0){b.next=rnd(T_CHEGADA[0],T_CHEGADA[1]);
+        if(b.f.t.length<CAP){const k=Core.emit(b.f,'','');k.sim=true;
+          if(Math.random()<.55)walk(b,'in',{door:'in',id:k.n});   // vem à porta
+          else k.away=true;}}                                     // tira a senha por QR e fica fora
+      b.f.t.forEach(k=>{if(k.sim&&k.st==='fora'&&k.away){          // os de fora regressam depois do aviso
+        if(k.ret==null&&Core.aFrente(b.f,k)<=NOTIFY_AT)k.ret=t+rnd(14,26);
+        if(k.ret!=null&&t>=k.ret){k.away=false;walk(b,'in',{door:'in',id:k.n});}}});
+      Core.serve(b.f,dt).forEach(k=>walk(b,'out',{door:'out',id:k.n}));}
+    avisos(b);
+    [b.din,b.dout].forEach(d=>{d.flash=Math.max(0,d.flash-dt);const k=d.flash>0;
+      d.beam.material.color.setHex(k?0xffffff:0xff3b3b);d.beam.material.opacity=k?1:.5;d.pane.material.opacity=k?.8:.4;});});
+  walkers.forEach(w=>{
+    const g=w.g,tg=w.path[w.i],dx=tg.x-g.position.x,dz=tg.z-g.position.z,d=Math.hypot(dx,dz),s=w.v*dt;
+    if(d<=s){g.position.x=tg.x;g.position.z=tg.z;if(w.i===w.cross&&w.fire)count(w.b,w.fire.door,w.fire.id);w.i++;if(w.i>=w.path.length)w.dead=true;}
+    else{g.position.x+=dx/d*s;g.position.z+=dz/d*s;g.rotation.y=Math.atan2(dx,dz);}});
+  walkers=walkers.filter(w=>{if(w.dead){w.g.visible=false;pool.push(w.g);return false;}return true;});}
+
+// ---------- painel ----------
+const panelEl=()=>document.getElementById('panel');
+function plan(b){
+  const f=b.f,pres=Core.presentes(f),fora=f.t.filter(k=>k.st==='fora'),mine=b.my&&b.my.k;
+  const dot=(cx,cy,k,fill,dash)=>'<circle cx="'+cx+'" cy="'+cy+'" r="5.4" fill="'+fill+'"'+(dash?' stroke="#ffc72c" stroke-dasharray="2 1.5"':(k===mine?' stroke="#fff" stroke-width="1.6"':''))+'/><text x="'+cx+'" y="'+(cy+2.2)+'" font-size="5.8" text-anchor="middle" fill="'+(dash?'#ffc72c':'#04110d')+'">'+k.n+'</text>';
+  let s='<rect x="6" y="6" width="258" height="106" rx="8" fill="#0f1f1b" stroke="#2c5248"/>';
+  for(let i=0;i<BALCOES;i++){const x=70+i*80;
+    s+='<rect x="'+x+'" y="14" width="56" height="13" rx="3" fill="#16302a" stroke="#2c5248"/><text x="'+(x+28)+'" y="23.5" font-size="8" text-anchor="middle" fill="#b9c9c3">Balcão '+(i+1)+'</text>';
+    if(pres[i])s+=dot(x+28,37,pres[i],'#ffc72c');}
+  pres.slice(BALCOES,BALCOES+20).forEach((k,i)=>{s+=dot(70+Math.floor(i/5)*14,56+(i%5)*11,k,'#0d9b78');});
+  if(pres.length>BALCOES+20)s+='<text x="150" y="98" font-size="9" fill="#ffc72c">+'+(pres.length-BALCOES-20)+'</text>';
+  if(fora.length){s+='<text x="226" y="46" font-size="7.5" text-anchor="middle" fill="#ffc72c">FORA</text>';
+    fora.slice(0,10).forEach((k,i)=>{s+=dot(214+(i%2)*24,57+Math.floor(i/2)*10,k,'#0f1f1b',true);});}
+  s+='<rect x="24" y="109" width="34" height="5" fill="#3ddc97"/><text x="41" y="104" font-size="8" text-anchor="middle" fill="#3ddc97">ENTRADA</text>'
+    +'<rect x="150" y="109" width="34" height="5" fill="#ff9d3d"/><text x="167" y="104" font-size="8" text-anchor="middle" fill="#ff9d3d">SAÍDA</text>';
+  return s;}
+function ago(d){if(!d.last)return '—';const s=Math.round((performance.now()-d.last)/1000);return s<60?'há '+s+' s':'há '+Math.round(s/60)+' min';}
+function myHTML(b){
+  if(!b.my)return '';
+  const k=b.my.k,f=b.f,pres=f.t.indexOf(k)>=0,st=pres?Core.stage(f,k):'feito',a=pres?Core.aFrente(f,k):0,e=Core.espera(a);
+  const L={fora:'Fora do banco — aguarde o aviso no WhatsApp',espera:'No banco — aguarde a chamada',atend:'É a sua vez — dirija-se ao balcão',feito:'Atendimento concluído ✔'}[st];
+  return '<div class="bkmy"><b>🎫 Senha '+k.n+'</b>'+(k.nome?' · '+esc(k.nome):'')+'<br>'+L+'<br>'
+    +(pres&&st!=='atend'?'À frente: <b>'+a+'</b> · espera ≈ <b>'+(e?e+' min':'agora')+'</b><br>':'')
+    +'<small>WhatsApp '+esc(fmtTel(k.tel))+' · aviso aos '+NOTIFY_AT+(k.log.length?' · enviadas: '+k.log.join(', '):'')+'</small>'
+    +(st==='fora'&&!SENSOR_API?'<div class="bkb">'+(k.walking?'<small>🚶 A caminho do banco…</small>':'<button data-act="voltar">🚶 Voltar ao banco</button>')+'</div>':'')+'</div>';}
+function update(b){
+  const root=panelEl().querySelector('[data-bank="'+b.idx+'"]');if(!root)return;const f=b.f,$=s=>root.querySelector(s);
+  $('.bkplan').innerHTML=plan(b);
+  const a=f.t.length;
+  $('.bk').innerHTML='Entraram <b>'+f.in+'</b> − Saíram <b>'+f.out+'</b> = Dentro <b>'+Core.dentro(f)+'</b><br>'
+    +'Em atendimento <b>'+Core.atend(f)+'</b> · Na fila <b>'+Core.fila(f)+'</b> · Fora, com senha <b>'+Core.fora(f)+'</b><br>'
+    +'Sensor 1 <small>'+ago(b.din)+'</small> · Sensor 2 <small>'+ago(b.dout)+'</small><br>'
+    +'Nova senha: <b>'+(f.seq+1)+'</b> · à frente <b>'+a+'</b> · espera ≈ <b>'+(Core.espera(a)||'<'+MIN_ATEND)+' min</b>';
+  $('.bkmy').innerHTML=myHTML(b);
+  $('.bksim').textContent=(SENSOR_API?(srcOk?'SENSORES REAIS — a receber de '+SENSOR_API:'Sem ligação aos sensores ('+SENSOR_API+')'):'SIMULADO (tempo acelerado) — sensores ultrassónicos ainda não ligados')+(WHATSAPP_API?'':' · WhatsApp simulado')+(b.msg?' · '+b.msg:'');
+  $('[data-act="auto"]').textContent=auto?'⏸ Pausar simulação':'▶ Retomar simulação';}
+function mount(b){
+  const P=panelEl();P.style.display='block';
+  P.innerHTML='<div data-bank="'+b.idx+'"><div class="t">banco</div><h2>'+b.p.nome+'</h2>'
+    +'<svg class="bkplan" viewBox="0 0 270 118" width="100%" style="margin-top:6px"></svg><div class="bk"></div><div class="bkmy-w"><div class="bkmy"></div></div>'
+    +'<div class="bkb"><button class="on" data-act="qr">📱 Marcar fila (QR)</button></div>'
+    +'<div class="bkb"'+(SENSOR_API?' hidden':'')+'><button data-act="hin">✋ Sensor 1 · entrada</button><button data-act="hout">✋ Sensor 2 · saída</button><button data-act="auto"></button></div>'
+    +'<div class="bkb"><button data-act="cam">🎥 Ver portas</button><button onclick="routeTo()">🧭 Rota até aqui</button><button data-act="rst">↺ Zerar</button></div>'
+    +'<div class="sim bksim"></div></div>';
+  const R=P.firstChild;
+  R.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;
+    if(act==='qr')openQR(b);
+    else if(act==='hin'){b.msg='';external(b.idx,'in');}
+    else if(act==='hout'){b.msg='';external(b.idx,'out');}
+    else if(act==='auto')auto=!auto;
+    else if(act==='cam')fly={to:b.mid.clone(),t:0};
+    else if(act==='voltar'&&b.my&&b.my.k.st==='fora'&&!b.my.k.walking){b.my.k.walking=true;walk(b,'in',{door:'in',id:b.my.k.n});}
+    else if(act==='rst'){b.f=Core.make(0);b.my=null;b.msg='';walkers=walkers.filter(w=>{if(w.b===b){w.g.visible=false;pool.push(w.g);return false;}return true;});}
+    update(b);});
+  update(b);}
+function show(b){if(!panelEl().querySelector('[data-bank="'+b.idx+'"]'))mount(b);else{panelEl().style.display='block';update(b);}}
+const curBank=()=>typeof pSel!=='undefined'&&pSel&&banks.find(x=>x.p===pSel);
+
+// ---------- QR + ecrã do telemóvel (simulado) ----------
+function buildModal(){
+  modal=document.createElement('div');modal.id='bkqr';
+  modal.innerHTML='<div class="box" style="max-width:600px;width:100%;padding:16px;max-height:92vh;overflow:auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><b class="qt">Fila digital</b><button data-x>✕ Fechar</button></div>'
+    +'<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px">'
+    +'<div style="text-align:center;width:170px"><div class="qc" style="background:#fff;padding:8px;border-radius:8px;display:inline-block;min-height:60px;color:#04110d;font-size:11px"></div>'
+    +'<div style="font-size:11px;margin-top:6px">Aponte a câmara do telemóvel para este QR, à porta do banco.</div><div class="qu" style="font-size:10px;color:#8fa39c;margin-top:4px;word-break:break-all"></div></div>'
+    +'<div style="flex:1;min-width:230px"><div style="font-size:11px;color:#8fa39c;margin-bottom:6px">Ecrã do telemóvel (simulado)</div>'
+    +'<div style="border:2px solid #2c5248;border-radius:16px;padding:12px;background:#0d1a17">'
+    +'<div class="qf"><b>Entrar na fila</b><label>Nome (opcional)<input class="qn" maxlength="30" autocomplete="off"></label>'
+    +'<label>Número de WhatsApp<input class="qp" inputmode="tel" placeholder="84 123 4567" autocomplete="off"></label>'
+    +'<div class="qe" style="color:#ff8a8a;font-size:11.5px;min-height:16px;margin-top:4px"></div><button class="on" data-qa="go">Entrar na fila</button></div>'
+    +'<div class="qr" style="display:none"></div></div></div></div></div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{
+    if(e.target===modal||e.target.closest('[data-x]')){modal.style.display='none';return;}
+    const a=e.target.closest('[data-qa]');if(!a)return;const b=banks[+modal.dataset.b];if(!b)return;
+    if(a.dataset.qa==='go')register(b);
+    else if(a.dataset.qa==='new'){b.my=null;showForm();}
+    else if(a.dataset.qa==='back'){const k=b.my&&b.my.k;if(k&&k.st==='fora'&&!k.walking){k.walking=true;walk(b,'in',{door:'in',id:k.n});}}
+    else if(a.dataset.qa==='close')modal.style.display='none';});}
+const mq=s=>modal.querySelector(s);
+function showForm(){mq('.qf').style.display='block';mq('.qr').style.display='none';mq('.qe').textContent='';}
+function openQR(b){
+  if(!modal)buildModal();
+  modal.dataset.b=b.idx;mq('.qt').textContent='Fila digital · '+b.p.nome;
+  const url=(FILA_URL||'https://smartcity.moz/fila')+'/'+(b.idx+1),qc=mq('.qc');qc.innerHTML='';
+  if(window.QRCode){try{new QRCode(qc,{text:url,width:150,height:150,colorDark:'#04110d',colorLight:'#ffffff'});}catch(e){qc.textContent='QR indisponível';}}
+  else qc.textContent='QR indisponível (sem ligação à biblioteca)';
+  mq('.qu').textContent=url+(FILA_URL?'':' · QR de demonstração');
+  modal.style.display='flex';
+  if(b.my&&b.my.k&&b.f.t.indexOf(b.my.k)>=0)refreshQR(b);else{b.my=null;showForm();}}
+function register(b){
+  const nome=mq('.qn').value.trim().slice(0,30),tel=normTel(mq('.qp').value);
+  if(!tel){mq('.qe').textContent='Número inválido. Use um número moçambicano: 8X XXX XXXX.';return;}
+  const k=Core.emit(b.f,nome,tel);k.real=true;b.my={k};
+  notify(b,k,0);refreshQR(b);update(b);}
+function refreshQR(b){
+  if(!modal||modal.style.display==='none'||+modal.dataset.b!==b.idx||!b.my)return;
+  const k=b.my.k,done=b.f.t.indexOf(k)<0;
+  mq('.qf').style.display='none';const r=mq('.qr');r.style.display='block';
+  r.innerHTML=myHTML(b).replace('class="bkb"','class="bkb" style="display:none"')
+    +'<div class="bkb">'+(k.st==='fora'&&!done&&!SENSOR_API&&!k.walking?'<button data-qa="back">🚶 Voltar ao banco</button>':'')
+    +(done?'<button data-qa="new">Nova senha</button>':'<button data-qa="close">Fechar e sair do banco</button>')+'</div>'
+    +'<div style="font-size:11px;color:#8fa39c;margin-top:8px">Pode sair do banco e ir a outro lugar. Avisamos por WhatsApp quando faltarem '+NOTIFY_AT+' pessoas à sua frente.</div>';}
+
+function ui(){
+  banks.forEach(b=>{b.din.el.textContent='ENTRADA · sensor 1 ▸ '+b.f.in;b.dout.el.textContent='SAÍDA · sensor 2 ▸ '+b.f.out;});
+  const b=curBank();if(b)show(b);
+  if(modal&&modal.style.display!=='none'){const q=banks[+modal.dataset.b];if(q)refreshQR(q);}}
+
+// ---------- arranque e ligação aos outros módulos ----------
+const oldRP=window.renderPanel;
+window.renderPanel=function(){const b=curBank();if(b){show(b);return;}oldRP&&oldRP();};
+
+const st=document.createElement('style');
+st.textContent='.bk{font-size:12.5px;line-height:1.65;margin-top:6px}.bk b,.bkmy b{color:var(--gold)}.bk small,.bkmy small{color:#8fa39c}.bkb{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}'
+ +'.bkmy{font-size:12.5px;line-height:1.6;margin-top:8px}.bkmy:not(:empty){border:1px solid #2c5248;border-radius:10px;padding:8px 10px;background:rgba(13,92,71,.18)}'
+ +'#panel{max-height:72vh;overflow:auto}'
+ +'#bkqr{position:fixed;inset:0;z-index:35;background:rgba(5,10,9,.72);display:none;align-items:center;justify-content:center;padding:14px}'
+ +'#bkqr label{display:block;font-size:11.5px;color:#b9c9c3;margin-top:8px}'
+ +'#bkqr input{width:100%;margin-top:3px;padding:8px 10px;border-radius:8px;border:1px solid #2c5248;background:#0a1210;color:#eee9dc;font-size:14px;outline:none}';
+document.head.appendChild(st);
+
+const prev=window.onCityReady;
+window.onCityReady=function(){
+  prev&&prev();M=window.MOB||null;registerWhatsApp();
+  GB=new THREE.CylinderGeometry(H*.17,H*.2,H*.62,10);GH=new THREE.SphereGeometry(H*.13,10,8);
+  banks=pois.filter(p=>p.tipo==='banco').map(build);
+  ui();
+  {let ra=0;setInterval(async()=>{try{const j=await(await fetch(window.SC_API+'/api/fila/registos?after='+ra)).json();for(const g of j.registos||[]){ra=Math.max(ra,g.id|0);const x=window.SmartBank.registar(g.bank|0,g.nome,g.telefone);fetch(window.SC_API+'/api/fila/resultado',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({id:g.id},x||{erro:'registo invalido'}))}).catch(()=>{});}}catch(e){}},1000);}
+  if(SENSOR_API){let after=0;setInterval(async()=>{
+    try{const r=await fetch(SENSOR_API+'?after='+after),j=await r.json();
+      (j.events||[]).forEach(e=>{after=Math.max(after,e.id|0);external(e.bank|0,e.door);});srcOk=true;}
+    catch(e){srcOk=false;}},1000);}
+};
+
+const pt=window.tick;
+window.tick=function(t){
+  pt&&pt(t);
+  if(!banks.length)return;
+  const dt=Math.min(Math.max(t-lastT,0),.1);lastT=t;
+  step(dt,t);
+  if(t-lastUI>.25){lastUI=t;ui();}};
+
+window.SmartBank={registar(i,nome,tel){const b=banks[i|0],t=normTel(tel);if(!b||!t)return null;const k=Core.emit(b.f,String(nome||'').trim().slice(0,30),t);k.real=true;notify(b,k,0);update(b);const a=Core.aFrente(b.f,k);return{senha:k.n,a_frente:a,espera_min:Core.espera(a)};},pulse:external,get banks(){return banks;},_core:Core,_normTel:normTel,_cfg:{BALCOES,MIN_ATEND,NOTIFY_AT}};
+})();
+</script>
+
+<script>
+// ===== MODO MERCADO v1 — stock, compra à distância (SIMULADA), chat de pesquisa e distância por vias =====
+// Tudo SIMULADO: catálogo/preços/stock de demonstração. Futuro: cada loja cadastra os seus produtos (API/BD).
+// A IA (opcional) só interpretaria a pergunta; stock, preço e distância são calculados aqui (lógica determinística).
+(function(){
+// >>PURE
+const CATALOGO={
+ 'Mercearia':[['Arroz 1 kg',85],['Açúcar 1 kg',70],['Óleo 1 L',140],['Farinha de milho 1 kg',60],['Sal 1 kg',25],['Leite 1 L',75],['Pão',8],['Água 1,5 L',35],['Feijão 1 kg',110],['Sabão',30]],
+ 'Mercado de Peixe':[['Peixe fresco 1 kg',220],['Camarão 1 kg',650],['Lulas 1 kg',380],['Caranguejo 1 kg',420],['Peixe seco 1 kg',300]],
+ 'Loja':[['Carregador USB',250],['Lanterna',180],['Pilhas (4)',90],['Rádio pequeno',700],['Power bank',900],['Cabo USB',120]],
+ 'Lavandaria':[['Lavagem de roupa (kg)',60],['Engomar (peça)',25],['Detergente 1 kg',130],['Sabão',30]]};
+const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const hs=s=>{let x=7;for(const c of s)x=(x*31+c.charCodeAt(0))>>>0;return x;};
+const rnd=s=>(hs(s)%1000)/1000;
+const MT=v=>Math.round(v).toLocaleString('pt-PT')+' MT';
+const stem=w=>w.replace(/s$/,'');
+const kw=n=>norm(n).replace(/\(.*?\)/g,'').replace(/\s*\d.*$/,'').trim();
+const tokens=n=>kw(n).split(' ').filter(w=>w.length>=4||w==='sal'||w==='pao').map(stem);
+const matchScore=(n,q)=>{const qw=norm(q).split(/[^a-z0-9]+/).filter(Boolean).map(stem);return tokens(n).filter(w=>qw.includes(w)).length;};
+const catKey=nome=>Object.keys(CATALOGO).find(k=>nome.startsWith(k));
+const makeStock=nome=>{const k=catKey(nome);return k?CATALOGO[k].map(([n,p])=>({n,preco:Math.round(p*(.9+.25*rnd(nome+n))),stock:rnd(nome+n+'s')<.15?0:Math.round(2+38*rnd(nome+n+'q'))})):[];};
+const fmtT=m=>m<1?'<1 min':Math.round(m)+' min';
+const fmtD=m=>m<1000?Math.round(m)+' m':(m/1000).toFixed(2).replace('.',',')+' km';
+const parseAI=raw=>{let t=String(raw||'').replace(/^\s*```(?:json)?/i,'').replace(/```\s*$/,'').trim(),o;try{o=JSON.parse(t);}catch(e){o={texto:t,acoes:[]};}
+  return{texto:String(o.texto||o.text||t||'').slice(0,1500),acoes:Array.isArray(o.acoes)?o.acoes.slice(0,3):[]};};
+// <<PURE
+const AI_KEY='';                                   // opcional: colar aqui a chave (NÃO partilhe este ficheiro depois). Ou use o botão 🔑 no chat.
+const MODELOS=['gemini-flash-latest','gemini-3.5-flash','gemini-3.1-flash-lite','gemini-2.5-flash'];   // tenta por ordem (2.0 já foi desativado; 2.5 termina a 16-out-2026)
+const $=id=>document.getElementById(id),panel=$('panel');
+let KEY=AI_KEY;try{KEY=KEY||sessionStorage.getItem('scm_gk')||'';}catch(e){}
+const hist=[];
+const STK=new Map(),cart=new Map(),orders=[];
+let user={x:0,z:0,nome:'Centro'},uMark=null,setting=false,routeLn=null,filt='',lastS=null,uInit=false;
+const stockOf=p=>{if(!STK.has(p))STK.set(p,makeStock(p.nome));return STK.get(p);};
+const lojas=()=>pois.filter(p=>p.tipo==='comercio'&&stockOf(p).length);
+const cartOf=p=>{if(!cart.has(p))cart.set(p,{});return cart.get(p);};
+const ready=()=>pois.length&&window.MOB&&window.MOB.nodes&&window.MOB.nodes.length;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// ---- posição do utilizador + distância por vias (respeita vias bloqueadas/alagadas) ----
+const snap=(x,z)=>{let b=null,bd=1e9;MOB.nodes.forEach(n=>{const d=Math.hypot(n.x-x,n.z-z);if(d<bd){bd=d;b=n;}});return b;};
+const CALM='Calma, respire fundo: vamos decidir passo a passo. Não atravesse água em movimento, afaste-se de fios e aparelhos elétricos e vá para um ponto mais alto. ';
+function nname(n){return 'Cruz. '+String.fromCharCode(65+n.r)+(n.c+1);}
+function nearNodes(x,z,k){return MOB.nodes.map(n=>({n,d:Math.hypot(n.x-x,n.z-z)})).sort((a,b)=>a.d-b.d).slice(0,k);}
+function landmark(n){let b=null,bd=70;pois.forEach(p=>{const d=Math.hypot(p.centro.x-n.x,p.centro.z-n.z);if(d<bd){bd=d;b=p;}});return b?b.nome:null;}
+function nearTxt(x,z){return nearNodes(x,z,2).map(o=>{const l=landmark(o.n);return'<b>'+nname(o.n)+'</b> ('+Math.round(o.d)+' m'+(l?', junto a '+esc(l):'')+')';}).join(' e ');}
+const nearPlain=(x,z)=>nearTxt(x,z).replace(/<[^>]+>/g,'');
+function calmHtml(){return'<b>Calma — vamos pensar juntos, passo a passo.</b> Respire fundo.<br>1) Não atravesse água em movimento nem conduza por vias alagadas.<br>2) Afaste-se de fios, postes e aparelhos elétricos.<br>3) Vá para um ponto mais alto e leve só o essencial (telemóvel, água, documentos).<br>Abra <b>🌧 Inundações → 🤖 Explicar</b> para ver a zona segura e a rota.<br><i>Está sozinho(a) ou há crianças/idosos consigo?</i>';}
+function placeUser(x,z,nome){const nn=nearNodes(x,z,1)[0].n;user={x,z,nome:nome+' · '+nname(nn)};
+  if(!uMark){const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.SphereGeometry(2,16,12),new THREE.MeshBasicMaterial({color:0x2a8bd6})));
+    const r=new THREE.Mesh(new THREE.RingGeometry(3,4,32),new THREE.MeshBasicMaterial({color:0x2a8bd6,transparent:true,opacity:.6,side:THREE.DoubleSide}));r.rotation.x=-Math.PI/2;r.position.y=-1.5;g.add(r);
+    const d=document.createElement('div');d.className='lbl';d.textContent='📍 Você';const l=new THREE.CSS2DObject(d);l.position.set(0,5,0);g.add(l);uMark=g;scene.add(g);}
+  uMark.position.set(x,groundTop+2.5,z);window.EVAC&&EVAC.setPos(x,z);clearRoute();$('mkPos').textContent=nname(nn).replace('Cruz. ','');if(pSel&&pSel.tipo==='comercio')renderStore(pSel);}
+function initUser(){if(uInit||!ready())return;uInit=true;const n=snap(0,0);placeUser(n.x,n.z,'Centro');}
+function dist(p){initUser();const sn=snap(user.x,user.z),dn=snap(p.centro.x,p.centro.z),air=Math.hypot(user.x-p.centro.x,user.z-p.centro.z);
+  const r=sn===dn?{path:[sn],len:0}:MOB.dij(sn,dn,false);if(!r)return{air,road:null,path:null};
+  return{air,road:Math.hypot(user.x-sn.x,user.z-sn.z)+r.len+Math.hypot(p.centro.x-dn.x,p.centro.z-dn.z),path:r.path};}
+function clearRoute(){if(routeLn){scene.remove(routeLn);routeLn.geometry.dispose();routeLn.material.dispose();routeLn=null;}}
+function drawRoute(d,p){clearRoute();if(!d.path)return;const y=groundTop+1.2,pts=[new THREE.Vector3(user.x,y,user.z),...d.path.map(n=>new THREE.Vector3(n.x,y,n.z)),new THREE.Vector3(p.centro.x,y,p.centro.z)].filter((v,i,a)=>!i||v.distanceTo(a[i-1])>.05);
+  if(pts.length<2)return;const cp=new THREE.CurvePath();for(let i=0;i<pts.length-1;i++)cp.add(new THREE.LineCurve3(pts[i],pts[i+1]));
+  routeLn=new THREE.Mesh(new THREE.TubeGeometry(cp,pts.length*8,1.5,8,false),new THREE.MeshBasicMaterial({color:0xff1fa9,transparent:true,depthTest:false}));routeLn.renderOrder=999;scene.add(routeLn);}
+const distTxt=d=>d.road==null?'⛔ sem rota por vias (bloqueada/alagada) · linha reta '+fmtD(d.air):'📍 '+fmtD(d.road)+' por vias · 🚶 '+fmtT(d.road/80)+' · 🚗 '+fmtT(d.road/500);
+// ---- painel da loja: stock + carrinho ----
+function renderStore(p){panel.style.display='block';panel.style.maxHeight=(innerWidth<=700?'44vh':'64vh');panel.style.overflow='auto';
+  panel.innerHTML='<div class="t">comércio · stock</div><h2>'+esc(p.nome)+'</h2><p style="margin-top:4px">'+distTxt(dist(p))+'</p>'
+   +'<p><input id="mkF" placeholder="Filtrar produtos…" value="'+esc(filt)+'" class="mki"></p><div id="mkL"></div><div id="mkT"></div><div class="sim">SIMULADO — catálogo, preços e stock de demonstração (cadastro real: fase futura)</div>';
+  $('mkF').oninput=e=>{filt=e.target.value;list(p);};
+  $('mkL').onclick=e=>{const b=e.target.closest('button[data-d]');if(!b)return;const it=stockOf(p).find(i=>i.n===b.dataset.n),c=cartOf(p);
+    c[it.n]=Math.max(0,Math.min(it.stock,(c[it.n]||0)+ +b.dataset.d));list(p);};
+  list(p);}
+function list(p){const c=cartOf(p),q=norm(filt);
+  $('mkL').innerHTML=stockOf(p).filter(i=>!q||norm(i.n).includes(q)).map(i=>{const k=c[i.n]||0,tag=i.stock===0?'<span style="color:#e06666">esgotado</span>':i.stock<=5?'<span style="color:#ffc72c">últimas '+i.stock+'</span>':'stock '+i.stock;
+    return'<div class="mkrow"><div style="flex:1"><b>'+esc(i.n)+'</b><br><small>'+MT(i.preco)+' · '+tag+'</small></div><button data-d="-1" data-n="'+esc(i.n)+'"'+(k?'':' disabled')+'>−</button><b style="min-width:16px;text-align:center">'+k+'</b><button data-d="1" data-n="'+esc(i.n)+'"'+(k>=i.stock?' disabled':'')+'>+</button></div>';}).join('')||'<small>Nenhum produto com esse nome.</small>';
+  const its=stockOf(p).filter(i=>c[i.n]>0),tot=its.reduce((s,i)=>s+i.preco*c[i.n],0);
+  $('mkT').innerHTML='<p><b>Total: '+MT(tot)+'</b> ('+its.reduce((s,i)=>s+c[i.n],0)+' un.)</p><p style="display:flex;gap:6px;flex-wrap:wrap"><button id="mkBuy" style="font-weight:700;border-color:#ffc72c"'+(tot?'':' disabled')+'>🛒 Comprar à distância</button><button id="mkRt">🧭 Rota desde mim</button></p>';
+  $('mkBuy').onclick=()=>openBuy(p);$('mkRt').onclick=()=>drawRoute(dist(p),p);}
+// ---- compra à distância (simulada) ----
+const modal=document.createElement('div');modal.id='mkM';modal.style.cssText='position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:14px';
+modal.innerHTML='<button id="mkMX" style="position:absolute;top:12px;right:12px">✕ Fechar</button><div class="box" id="mkMB" style="background:#0f1c18;width:min(390px,100%);max-height:92vh;overflow:auto;padding:16px;font-size:12.5px;line-height:1.5"></div>';document.body.appendChild(modal);
+const closeM=()=>{modal.style.display='none';modal._o=null;};modal.onclick=e=>{if(e.target===modal)closeM();};modal.querySelector('#mkMX').onclick=closeM;
+function openBuy(p){const c=cartOf(p),its=stockOf(p).filter(i=>c[i.n]>0);if(!its.length)return;const sub=its.reduce((s,i)=>s+i.preco*c[i.n],0),d=dist(p),taxa=d.road==null?null:Math.round(30+d.road/100*2);
+  const B=$('mkMB');modal.style.display='flex';
+  B.innerHTML='<div class="t" style="color:#ffc72c;font-size:11px;text-transform:uppercase">compra à distância · simulada</div><h2 style="margin:2px 0 8px;font-size:16px">'+esc(p.nome)+'</h2>'
+   +its.map(i=>'<div>'+c[i.n]+' × '+esc(i.n)+' <span style="float:right">'+MT(i.preco*c[i.n])+'</span></div>').join('')
+   +'<hr style="border:0;border-top:1px solid #25423b"><label><input type="radio" name="mkE" value="lev" checked> Levantar na loja (grátis)</label><br><label><input type="radio" name="mkE" value="ent"'+(taxa==null?' disabled':'')+'> Entrega no meu local ('+(taxa==null?'sem rota':'+'+MT(taxa))+')</label>'
+   +'<p style="margin:8px 0 4px">Pagamento (simulado):</p><select id="mkP" class="mki"><option>M-Pesa</option><option>e-Mola</option><option>mKesh</option><option>Pagar no levantamento/entrega</option></select>'
+   +'<p style="margin:8px 0 4px">Telemóvel (para o aviso, opcional):</p><input id="mkTel" class="mki" placeholder="+258 8x xxx xxxx" inputmode="tel">'
+   +'<p style="font-size:14px;margin:10px 0"><b>Total: <span id="mkTot">'+MT(sub)+'</span></b></p><div id="mkErr" style="color:#e06666"></div>'
+   +'<div style="display:flex;gap:8px"><button id="mkOk" style="flex:1;font-weight:700;border-color:#ffc72c;padding:10px">Confirmar compra</button><button id="mkNo">Cancelar</button></div>';
+  B.querySelectorAll('input[name=mkE]').forEach(r=>r.onchange=()=>{$('mkTot').textContent=MT(sub+(B.querySelector('input[name=mkE]:checked').value==='ent'?taxa:0));});
+  $('mkNo').onclick=closeM;
+  $('mkOk').onclick=()=>{const bad=its.filter(i=>c[i.n]>i.stock);if(bad.length){$('mkErr').textContent='O stock mudou: '+bad.map(i=>i.n+' (resta '+i.stock+')').join(', ')+'. Ajuste o carrinho.';return;}
+    const ent=B.querySelector('input[name=mkE]:checked').value==='ent',tel=$('mkTel').value.trim(),pay=$('mkP').value;
+    its.forEach(i=>{i.stock-=c[i.n];});const eta=d.road==null?0:d.road/500,o={code:'SCM-'+(1000+Math.floor(Math.random()*9000)),p,lines:its.map(i=>c[i.n]+'× '+i.n),total:sub+(ent?taxa:0),ent,tel,pay,t0:Date.now(),eta,
+      steps:ent?[[0,'Pedido recebido'],[3,'A preparar'],[8,'🚗 A caminho'],[8+Math.min(20,Math.max(4,eta*4)),'✔ Entregue']]:[[0,'Pedido recebido'],[3,'A preparar'],[8,'✔ Pronto para levantar na loja']]};
+    orders.push(o);cart.set(p,{});modal._o=o;showOrder(o);if(pSel===p)renderStore(p);};}
+const stateOf=o=>{const s=(Date.now()-o.t0)/1000;let r=o.steps[0][1];o.steps.forEach(([t,n])=>{if(s>=t)r=n;});return r;};
+function showOrder(o){$('mkMB').innerHTML='<div style="font-size:30px;text-align:center">✅</div><h2 style="text-align:center;margin:4px 0">Pedido '+o.code+'</h2>'
+  +'<p style="text-align:center;color:#ffc72c;font-size:14px"><b id="mkSt">'+stateOf(o)+'</b></p><p>'+esc(o.p.nome)+' · '+o.lines.map(esc).join(', ')+'<br>Total <b>'+MT(o.total)+'</b> · '+esc(o.pay)+' · '+(o.ent?'Entrega ao seu local':'Levantamento na loja')+'</p>'
+  +(o.tel?'<p>📱 Confirmação para '+esc(o.tel)+': <i>«SmartCity Moz · pedido '+o.code+' confirmado em '+esc(o.p.nome)+'»</i> (mensagem simulada)</p>':'')
+  +'<div class="sim" style="color:#d98b8b;font-size:10.5px">SIMULADO — sem pagamento nem loja real; estados em tempo acelerado.</div><p><button id="mkNo2" style="width:100%;padding:10px">Fechar</button></p>';$('mkNo2').onclick=closeM;}
+setInterval(()=>{const o=modal._o;if(o&&modal.style.display!=='none'&&$('mkSt'))$('mkSt').textContent=stateOf(o);},500);
+// ---- chat ----
+const st=document.createElement('style');st.textContent='.mki{width:100%;padding:7px 9px;border-radius:8px;border:1px solid #25423b;background:rgba(10,18,16,.85);color:#eee9dc;font-size:12.5px;outline:none}.mkrow{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #1c332d}.mkrow button:disabled,#mkBuy:disabled,#mkOk:disabled{opacity:.4;cursor:default}'
+ +'#mkLog .u{background:#0d5c47;margin:5px 0 5px auto;padding:6px 9px;border-radius:10px;max-width:88%;width:fit-content}#mkLog .b{background:#16302a;margin:5px 0;padding:6px 9px;border-radius:10px;max-width:96%}#mkLog .r{padding:6px 0;border-top:1px solid #25423b;margin-top:6px}#mkLog button{margin:4px 4px 0 0;padding:4px 8px}';document.head.appendChild(st);
+const bt=document.createElement('button');bt.textContent='💬 Assistente';bt.style.fontWeight='700';$('top').appendChild(bt);
+const chat=document.createElement('div');chat.className='box';chat.style.cssText='background:rgba(10,18,16,.97);position:fixed;left:14px;z-index:19;width:min(350px,calc(100% - 28px));display:none;flex-direction:column;overflow:hidden';
+chat.innerHTML='<div style="padding:9px 12px;border-bottom:1px solid #25423b;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap"><b style="font-size:13px">💬 Assistente SmartCity Moz</b><span style="display:flex;gap:6px"><button id="mkLoc" title="Definir a minha posição no mapa">📍 <span id="mkPos">—</span></button> <button id="mkK" title="Ligar a IA do assistente">🔑</button> <button id="mkX">✕</button></span></div>'
+ +'<div id="mkLog" style="flex:1;overflow:auto;padding:8px 12px;font-size:12.5px;line-height:1.45;min-height:0"></div><div id="mkCh" style="padding:0 12px 6px;display:flex;gap:5px;flex-wrap:wrap"></div>'
+ +'<div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid #25423b"><input id="mkIn" class="mki" placeholder="Pergunte: arroz, açúcar mais barato…" autocomplete="off"><button id="mkSend">➤</button></div>';document.body.appendChild(chat);
+const log=$('mkLog');
+function say(html,who,txt){const d=document.createElement('div');d.className=who;if(txt)d.textContent=txt;else d.innerHTML=html;log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
+function openChat(){const r=$('top').getBoundingClientRect();chat.style.top=Math.round(r.bottom+8)+'px';chat.style.maxHeight='min(42vh,360px)';if(isMob()&&dm)setDock(null);chat.style.display='flex';initUser();
+  if(!log.children.length)say('Olá, '+greet()+'! Sou o <b>Assistente SmartCity Moz</b>. Pergunte por <b>qualquer produto</b> (ex.: arroz, camarão, pilhas) e digo-lhe <b>que loja tem</b>, <b>preço</b>, <b>stock</b> e a <b>distância</b> desde a sua posição (<b>'+user.nome+'</b>). Também posso levá-lo a comprar à distância. <small style="color:#d98b8b">Catálogo simulado.</small>','b');$('mkIn').focus();}
+bt.onclick=()=>chat.style.display==='flex'?chat.style.display='none':openChat();$('mkX').onclick=()=>chat.style.display='none';
+['Onde tem arroz?','Açúcar mais barato','Pilhas mais perto','Camarão','Loja mais próxima','Meus pedidos'].forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>ask(t);$('mkCh').appendChild(b);});
+const SYS='És o assistente do SmartCity Moz (demonstração académica, Moçambique). Apresenta-te como Assistente SmartCity Moz; nunca menciones Gemini, Google nem outros modelos. Responde em português de Moçambique, curto (máx. 5 linhas), tom simples e caloroso. Usa APENAS os DADOS fornecidos: nunca inventes lojas, preços, stock ou distâncias. Se o produto não existir ou estiver esgotado/inacessível, diz isso. Compara preço e distância e recomenda uma opção. Lojas com acessivel=false estão sem rota (cheia/bloqueio) — avisa. Não executas compras: sugere a ação e o utilizador confirma no botão. Se a pessoa estiver em perigo, numa cheia ou emergência (ver dados de cheia): primeiro acalma-a numa frase; depois diz como reagir (2-3 conselhos práticos); usa a posição e os dados de cheia; termina com UMA pergunta curta que a ajude a pensar (até 7 linhas nesse caso). Responde SÓ em JSON: {"texto":"...","acoes":[{"tipo":"rota"|"comprar"|"ver","loja":<id>,"produto":"<nome exacto, só para comprar>"}]} com no máximo 3 ações.';
+function ctx(){initUser();const f=p=>{const d=dist(p);return{id:pois.indexOf(p),nome:p.nome,distancia_m:d.road==null?null:Math.round(d.road),acessivel:d.road!=null};};
+  return{posicao_utilizador:user.nome+' (cruzamentos próximos: '+nearPlain(user.x,user.z)+')',cheia:{nivel_chuva:typeof wTarget!=='undefined'?wTarget:0,vias_alagadas:MOB.edges.filter(e=>(e.dep||0)>.2).length,vias_bloqueadas:MOB.edges.filter(e=>e.blocked).length},moeda:'MT',lojas:lojas().map(p=>Object.assign(f(p),{produtos:stockOf(p).map(i=>({nome:i.n,preco:i.preco,stock:i.stock}))})),outros_locais:pois.filter(p=>p.tipo!=='comercio').map(p=>Object.assign(f(p),{tipo:p.tipo}))};}
+const gem=t=>callG(SYS,'DADOS: '+JSON.stringify(ctx())+'\nPERGUNTA: '+t,hist.slice(-6),true);
+const SYS_E='És o Assistente SmartCity Moz, em modo de emergência de cheias (demonstração, Moçambique). Nunca digas que és Gemini, Google ou outro modelo. Fala português de Moçambique, com tom calmo, humano e firme, em texto simples (sem markdown), no máximo 7 frases curtas. Estrutura: (1) uma frase para acalmar a pessoa (respirar, há um plano, vão decidir passo a passo); (2) como reagir: escolhe os 2 ou 3 conselhos mais úteis para este estado, entre: não atravessar água em movimento nem conduzir por vias alagadas, afastar-se de fios, postes e aparelhos elétricos, ir para um ponto mais alto, levar só o essencial (telemóvel, água, documentos), avisar família e vizinhos; (3) o local seguro e a rota calculados pelo sistema, usando só os nomes e metros do ESTADO e do RESUMO (não inventes); (4) termina com UMA pergunta curta que ajude a pessoa a pensar (por exemplo: está sozinha? há crianças ou idosos consigo? consegue chegar a pé?). Se não houver rota, diz para subir ao ponto mais alto, manter-se longe da água e esperar as equipas. Se o ESTADO indicar que não há cheia, diz que não há perigo agora e dá uma dica de preparação.';
+const greet=()=>window.USER&&USER.primeiro?'Sr(a). '+USER.primeiro:'bem-vindo(a)';
+function tratRule(){const U=window.USER||{};return ' TRATAMENTO OBRIGATÓRIO: dirige-te à pessoa de forma formal, por "senhor" ou "senhora" (género desconhecido: usa "Sr(a). '+(U.primeiro||'')+'" ou "o(a) senhor(a)"), usando APENAS o primeiro nome'+(U.primeiro?' ('+U.primeiro+')':'')+'. Nunca uses "mano", "meu", "maninho", gírias nem o "tu"; mantém tom respeitoso.';}
+async function callG(sys,userText,history,json){sys+=tratRule();const body=JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[...history,{role:'user',parts:[{text:userText}]}],generationConfig:Object.assign({temperature:.3},json?{responseMimeType:'application/json'}:{})});
+  let err='falhou';
+  for(const m of MODELOS){for(let k=0;k<2;k++){let r;
+    try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+m+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':KEY},body});}catch(e){throw new Error('sem ligação à internet');}
+    const j=await r.json().catch(()=>({}));
+    if(r.ok){const raw=(j.candidates&&j.candidates[0]&&j.candidates[0].content?j.candidates[0].content.parts:[]).map(x=>x.text||'').join('');if(!raw)throw new Error('resposta vazia (filtro de segurança?)');return raw;}
+    err=(j.error&&j.error.message)||('HTTP '+r.status);
+    if(r.status===400&&/key/i.test(err))throw new Error('chave inválida');
+    if(r.status===403)throw new Error('chave sem permissão/restrita');
+    if(r.status===503||r.status===500){if(r.status===503)err='serviço de IA com alta procura, tente de novo';if(k===0){await new Promise(z=>setTimeout(z,900));continue;}break;}  // 1 repetição e depois próximo modelo
+    if(r.status===404||r.status===429)break;                       // modelo desativado / quota deste modelo → próximo
+    throw new Error(err.slice(0,90));}}
+  throw new Error(err.slice(0,90));}
+function aiHtml(a){const lst=lojas(),btn=[];(a.acoes||[]).forEach(x=>{const p=pois[+x.loja];if(!p)return;const i=pois.indexOf(p);
+    if(x.tipo==='rota')btn.push('<button data-a="route" data-i="'+i+'">🧭 Rota · '+esc(p.nome)+'</button>');
+    else if(x.tipo==='ver')btn.push('<button data-a="open" data-i="'+i+'">📦 Stock · '+esc(p.nome)+'</button>');
+    else if(x.tipo==='comprar'&&p.tipo==='comercio'){const it=stockOf(p).find(y=>y.n===x.produto);if(it&&it.stock>0)btn.push('<button data-a="buy" data-i="'+i+'" data-n="'+esc(it.n)+'">🛒 Comprar '+esc(it.n)+' · '+esc(p.nome)+'</button>');}});
+  return esc(a.texto).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')+(btn.length?'<div>'+btn.join('')+'</div>':'')+'<div style="font-size:10px;color:#8fa39c;margin-top:4px">✨ Assistente SmartCity Moz · dados simulados; stock, preço e distância calculados pelo sistema</div>';}
+async function ask(t){t=t.trim();if(!t)return;openChat();say('','u',t);
+  if(!KEY||!ready()){say(answer(t),'b');return;}
+  const w=say('<i>a pensar…</i>','b');
+  try{const a=parseAI(await gem(t));w.innerHTML=aiHtml(a);hist.push({role:'user',parts:[{text:t}]},{role:'model',parts:[{text:a.texto}]});}
+  catch(e){w.innerHTML=answer(t)+'<div class="sim" style="color:#d98b8b;font-size:10.5px;margin-top:4px">IA indisponível ('+esc(e.message)+') — resposta local do sistema.</div>';}
+  log.scrollTop=log.scrollHeight;}
+$('mkK').onclick=()=>{const k=prompt('Cole a chave da API de IA do assistente.\nFica só nesta sessão do navegador (não é gravada no ficheiro). Deixe vazio para desligar a IA.',KEY?'(chave definida — cole outra ou apague)':'');
+  if(k===null)return;const v=k.trim();if(v.startsWith('(chave'))return;KEY=v;try{v?sessionStorage.setItem('scm_gk',v):sessionStorage.removeItem('scm_gk');}catch(e){}hist.length=0;
+  say(v?'✨ Assistente com IA <b>ligado</b>. Pergunte à vontade (ex.: «tenho 500 MT, o que compro para o jantar?»).':'IA desligada — a usar a pesquisa local.','b');$('mkK').style.borderColor=v?'#ffc72c':'';};
+if(KEY)setTimeout(()=>{const b=$('mkK');if(b)b.style.borderColor='#ffc72c';},0);
+$('mkSend').onclick=()=>{ask($('mkIn').value);$('mkIn').value='';};$('mkIn').onkeydown=e=>{if(e.key==='Enter'){ask(e.target.value);e.target.value='';}};
+const sq=$('q');if(sq){sq.placeholder='Pesquisar: banco, loja, arroz… (Enter = assistente)';sq.addEventListener('keydown',e=>{if(e.key==='Enter'&&sq.value.trim()){ask(sq.value);sq.value='';$('res').style.display='none';}});}
+$('mkLoc').onclick=()=>{setting=true;renderer.domElement.style.cursor='crosshair';say('Clique no <b>chão do mapa</b> (rua ou terreno) para definir onde está.','b');};
+const og=window.onGroundClick;window.onGroundClick=function(ray){if(setting&&ready()){const pt=new THREE.Vector3();if(ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-groundTop),pt)){setting=false;renderer.domElement.style.cursor='';
+  const n=snap(pt.x,pt.z);placeUser(pt.x,pt.z,'Local escolhido');say('📍 Posição definida. Cruzamentos mais próximos: '+nearTxt(pt.x,pt.z)+'. Distâncias recalculadas.','b');return;}}og&&og(ray);};
+const help=()=>'Posso dizer <b>onde há</b> um produto, <b>preços</b>, <b>stock</b> e a loja <b>mais próxima</b> por vias (com cheias/bloqueios), e simular uma <b>compra à distância</b>. Experimente: «arroz», «açúcar mais barato», «lavandaria perto», «meus pedidos».';
+function rowsFor(name){return lojas().map(p=>({p,it:stockOf(p).find(i=>i.n===name),d:dist(p)})).filter(r=>r.it);}
+function prodHtml(names,cheap,near){let out='';names.slice(0,3).forEach(name=>{const rows=rowsFor(name),ok=r=>r.it.stock>0&&r.d.road!=null,sc=r=>r.it.preco+r.d.road/100;
+  const av=rows.filter(ok),best=av.slice().sort((a,b)=>sc(a)-sc(b))[0],cheapest=av.slice().sort((a,b)=>a.it.preco-b.it.preco)[0],nearest=av.slice().sort((a,b)=>a.d.road-b.d.road)[0];
+  const key=near?(r=>r.d.road):cheap?(r=>r.it.preco):sc;rows.sort((a,b)=>(ok(b)-ok(a))||(ok(a)?key(a)-key(b):0));
+  out+='<div class="r"><b>'+esc(name)+'</b> — '+rows.length+' loja(s)'+(cheapest?'<br>💰 Mais barato: <b>'+esc(cheapest.p.nome)+'</b> ('+MT(cheapest.it.preco)+')':'')+(nearest?'<br>📍 Mais perto: <b>'+esc(nearest.p.nome)+'</b> ('+fmtD(nearest.d.road)+')':'')+(av.length?'':'<br>⚠️ Sem stock acessível agora.')
+   +rows.map(r=>'<div style="margin-top:6px"><b>'+esc(r.p.nome)+'</b>'+(r===best?' ⭐ <small>melhor preço+distância</small>':'')+'<br>'+MT(r.it.preco)+' · '+(r.it.stock?'stock <b>'+r.it.stock+'</b>':'<span style="color:#e06666">esgotado</span>')+'<br><small>'+distTxt(r.d)+'</small><br>'
+     +'<button data-a="route" data-i="'+pois.indexOf(r.p)+'">🧭 Rota</button><button data-a="buy" data-i="'+pois.indexOf(r.p)+'" data-n="'+esc(name)+'"'+(r.it.stock?'':' disabled')+'>🛒 Comprar</button></div>').join('')+'</div>';});return out;}
+function placesHtml(list,label){const rows=list.map(p=>({p,d:dist(p)})).sort((a,b)=>(a.d.road==null)-(b.d.road==null)||(a.d.road==null?a.d.air-b.d.air:a.d.road-b.d.road)).slice(0,4);
+  return'Mais próximos (<b>'+label+'</b>) desde <b>'+user.nome+'</b>:'+rows.map(r=>'<div class="r"><b>'+esc(r.p.nome)+'</b><br><small>'+distTxt(r.d)+'</small><br><button data-a="route" data-i="'+pois.indexOf(r.p)+'">🧭 Rota</button>'+(r.p.tipo==='comercio'?'<button data-a="open" data-i="'+pois.indexOf(r.p)+'">📦 Ver stock</button>':'')+'</div>').join('');}
+function ordersHtml(){return orders.length?'<b>Os seus pedidos</b> (simulados):'+orders.slice().reverse().map(o=>'<div class="r"><b>'+o.code+'</b> · '+esc(o.p.nome)+'<br>'+o.lines.map(esc).join(', ')+' · '+MT(o.total)+'<br>Estado: <b>'+stateOf(o)+'</b></div>').join(''):'Ainda não fez nenhum pedido. Pesquise um produto e carregue em 🛒 Comprar.';}
+const PLACES=[[/banco/,p=>p.tipo==='banco','banco'],[/clinica|hospital|saude|urgenc/,p=>p.tipo==='hospital','clínica/hospital'],[/lavandaria/,p=>/^Lavandaria/.test(p.nome),'lavandaria'],[/loja/,p=>/^Loja/.test(p.nome),'loja'],[/mercearia|supermercado|mercado|comercio|compras/,p=>p.tipo==='comercio','comércio'],[/habitacao|bloco|casa/,p=>p.tipo==='habitacao','habitação'],[/desporto|campo|lazer/,p=>p.tipo==='lazer','desporto']];
+function answer(text){if(!ready())return'A cidade ainda está a carregar. Tente daqui a um instante.';initUser();const t=norm(text);
+  if(/meus? pedido|encomenda/.test(t))return ordersHtml();
+  if(/cheia|alag|inunda|enchente|socorro|emerg|perigo|a subir/.test(t))return calmHtml();
+  if(/onde estou|minha posi|minha local/.test(t))return'A sua posição: <b>'+user.nome+'</b>. Carregue em 📍 (topo do chat) e depois no chão do mapa para a mudar.';
+  if(/^(ola|oi|bom dia|boa tarde|boa noite|ajuda|help)\b/.test(t))return help();
+  const cheap=/barat|preco|custa|quanto|menor/.test(t),near=/perto|proxim|distanc|longe/.test(t);
+  const names=[...new Set(lojas().flatMap(p=>stockOf(p).map(i=>i.n)))];let sc=names.map(n=>[n,matchScore(n,t)]).filter(x=>x[1]>0);const mx=Math.max(0,...sc.map(x=>x[1]));sc=sc.filter(x=>x[1]===mx).map(x=>x[0]);
+  if(sc.length)return prodHtml(sc,cheap,near);
+  const pl=PLACES.find(x=>x[0].test(t));if(pl){const l=pois.filter(pl[1]);if(l.length)return placesHtml(l,pl[2]);}
+  return'Não encontrei «'+esc(text)+'» no catálogo (simulado). '+help();}
+log.onclick=e=>{const b=e.target.closest('button[data-a]');if(!b||b.disabled)return;const p=pois[+b.dataset.i],a=b.dataset.a;if(!p)return;
+  select(p,true);if(a==='route')drawRoute(dist(p),p);
+  if(a==='buy'){const it=stockOf(p).find(i=>i.n===b.dataset.n),c=cartOf(p);if(it&&it.stock)c[it.n]=Math.max(1,c[it.n]||0);renderStore(p);}if(isMob())chat.style.display='none';};
+// painel de comércio substitui o texto "por cadastrar"
+const prevRP=window.renderPanel;window.renderPanel=function(){if(pSel&&pSel.tipo==='comercio'&&ready()&&stockOf(pSel).length){if(lastS!==pSel){lastS=pSel;filt='';}renderStore(pSel);return;}
+  lastS=null;panel.style.maxHeight='';panel.style.overflow='';prevRP&&prevRP();};
+// ---- barra inferior: Mobilidade / Inundações (recolhidas por defeito; menos informação no ecrã) ----
+const dock=$('dock'),fl=$('flood');dock.prepend(fl);
+const isMob=()=>innerWidth<=700;
+const ui=document.createElement('style');ui.textContent='#mkBar{position:fixed;left:14px;bottom:56px;z-index:21;display:flex;gap:8px}#mkBar button{padding:9px 14px;font-size:13px;font-weight:700;background:rgba(10,18,16,.92)}#mkBar button.on{background:#0d5c47;border-color:#ffc72c}#dock{bottom:98px;display:none;max-height:46vh}#mkCh{flex-wrap:nowrap!important;overflow-x:auto}#mkCh button{white-space:nowrap;flex:0 0 auto}'
+ +'@media (max-width:700px){#status{display:none}#mkBar{bottom:14px;right:14px}#mkBar button{flex:1;font-size:12px;padding:9px 4px;min-width:0;white-space:nowrap}#dock{bottom:60px;right:14px;width:auto}#panel{bottom:60px;left:14px;right:14px;width:auto;max-height:44vh;overflow:auto}body.dk #panel{display:none!important}}';document.head.appendChild(ui);
+const bar=document.createElement('div');bar.id='mkBar';bar.innerHTML='<button id="mkBm">🚗 Mobilidade</button><button id="mkBf">🌧 Inundações</button>';document.body.appendChild(bar);
+let dm=null;const mobBox=[...dock.children].find(c=>c.querySelector&&c.querySelector('#mi')),evBox=[...dock.children].find(c=>c.querySelector&&c.querySelector('#eh'));
+function setDock(m){dm=m;dock.style.display=m?'flex':'none';if(mobBox)mobBox.style.display=m==='mob'?'':'none';if(evBox)evBox.style.display=m==='flood'?'':'none';fl.style.display=m==='flood'?'':'none';
+  $('mkBm').classList.toggle('on',m==='mob');$('mkBf').classList.toggle('on',m==='flood');document.body.classList.toggle('dk',!!m);if(m&&isMob())chat.style.display='none';}
+const mvSem=()=>{const b=[...fl.querySelectorAll('button')].find(x=>/Sem[áa]foros/.test(x.textContent));if(b&&mobBox){b.style.margin='6px 0 0';b.addEventListener('click',()=>{if(isMob()&&dm)setDock(null);});const w=mobBox.querySelector('#bGo').parentNode;w.appendChild(document.createTextNode(' '));w.appendChild(b);}};mvSem();new MutationObserver(mvSem).observe(fl,{childList:true});
+$('mkBm').onclick=()=>setDock(dm==='mob'?null:'mob');$('mkBf').onclick=()=>setDock(dm==='flood'?null:'flood');setDock(null);
+const dx=document.createElement('div');dx.style.cssText='position:sticky;top:0;align-self:flex-end;z-index:3';dx.innerHTML='<button id="dkX">✕ Fechar</button>';dock.prepend(dx);$('dkX').onclick=()=>setDock(null);
+const pn=$('panel'),closeP=()=>{pn.style.display='none';pSel=null;if(hi){scene.remove(hi);hi=null;}};
+const addX=()=>{if(pn.querySelector('#pX'))return;const b=document.createElement('button');b.id='pX';b.textContent='✕';b.title='Fechar';b.style.cssText='position:absolute;top:6px;right:8px;padding:2px 9px;font-size:14px;z-index:2';b.onclick=closeP;pn.prepend(b);};
+new MutationObserver(addX).observe(pn,{childList:true});addX();
+const sx=document.createElement('style');sx.textContent='#panel h2{padding-right:30px}';document.head.appendChild(sx);
+addEventListener('keydown',e=>{if(e.key!=='Escape')return;closeP();['mkM','bkqr'].forEach(i=>{const m=$(i);if(m)m.style.display='none';});if(dm)setDock(null);});
+const _sel=window.select;if(typeof _sel==='function')window.select=function(){if(isMob()&&dm)setDock(null);return _sel.apply(this,arguments);};
+// ---- IA de evacuação (botão 🤖 Explicar) também usa a IA do assistente; sem chave, mantém o texto por regras ----
+(function(){const AI=window.SmartCityAI;if(!AI||AI._g)return;AI._g=1;const orig=AI.explain.bind(AI);
+  AI.explain=async function(){const base=await orig(),clean=base.replace(/\s*\[IA não ligada[^\]]*\]/,'');
+    if(!KEY)return CALM+clean+' [IA desligada — carregue em 🔑 no 💬 Assistente]';
+    try{const txt=await callG(SYS_E,'ESTADO: '+JSON.stringify(this.snapshot())+'\nRESUMO DO SISTEMA: '+clean+'\nPERGUNTA: Explique a melhor rota de evacuação e o que fazer.',[],false);return txt.replace(/\*\*/g,'').trim().slice(0,1300)+' ✨';}
+    catch(e){return CALM+clean+' (IA indisponível: '+e.message+')';}};})();
+const pt0=window.tick;window.tick=function(t){pt0&&pt0(t);const k=.8+.2*Math.sin(t*6);scene.children.forEach(o=>{if(o.renderOrder===999&&o.material){o.material.transparent=true;o.material.opacity=k;}});};   // rotas pulsam
+(function(){const A=window.SmartCityAI;if(!A)return;
+const hist=[],used={};let busy=false,open=false,lastKey='',lastBot=0,wasFlood=false;
+const SYS_C='És o assistente de cheias do SmartCity Moz (demonstração, Moçambique). Conversa em texto simples, sem markdown, como uma pessoa calma e atenciosa: 2 a 4 frases curtas, tom humano e tranquilizador, nunca alarmista. Não uses fórmulas fixas nem repitas expressões ou conselhos já dados nas mensagens anteriores: varia a abertura e as palavras. MOMENTO "abertura": acalma a pessoa, diz o que está a acontecer e o essencial a fazer, indica o local seguro e a rota do ESTADO (só nomes e metros reais, não inventes) e termina com uma pergunta curta. MOMENTO "atualizacao": diz só o que mudou e se é preciso agir. MOMENTO "pergunta": responde diretamente à MENSAGEM DA PESSOA, com um conselho prático, ligando ao ESTADO se ajudar. Se não houver cheia, tranquiliza e dá uma dica de preparação. Se não houver rota segura, manda subir ao ponto mais alto e esperar as equipas. Em perigo imediato, sugere contactar os serviços de emergência locais.';
+const nm=()=>window.USER&&USER.primeiro?'Sr(a). '+USER.primeiro:'caro(a) utilizador(a)';
+const pick=(k,a)=>{let i;do{i=Math.floor(Math.random()*a.length);}while(a.length>1&&used[k]===i);used[k]=i;return a[i];};
+const L=()=>$('fcL');
+const el=document.createElement('div');el.id='fch';el.className='box';
+el.style.cssText='position:fixed;right:14px;top:70px;z-index:24;width:min(340px,calc(100% - 28px));max-height:52vh;display:none;flex-direction:column;background:rgba(10,18,16,.97);border-color:#d8232a;font-size:12.5px;line-height:1.45';
+el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid #25423b"><b>🆘 Assistente de cheias</b><button id="fcX">✕</button></div><div id="fcL" style="flex:1;overflow:auto;padding:8px 10px;min-height:80px"></div><div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid #25423b"><input id="fcI" class="mki" placeholder="Escreva aqui…" autocomplete="off"><button id="fcG">➤</button></div>';
+document.body.appendChild(el);
+const sm=document.createElement('style');sm.textContent='@media (max-width:700px){#fch{left:14px!important;right:14px!important;width:auto!important;max-height:46vh!important}}';document.head.appendChild(sm);
+const msg=(t,k)=>{const d=document.createElement('div');d.style.cssText='margin:5px 0;padding:7px 10px;border-radius:12px;width:fit-content;max-width:92%;'+(k==='u'?'background:#0d5c47;margin-left:auto':k==='n'?'color:#8fa39c;font-size:11px;padding:2px 4px':'background:#16302a');d.textContent=t;L().appendChild(d);L().scrollTop=L().scrollHeight;return d;};
+window.floodChatNote=t=>{if(!open)return false;msg(t,'n');return true;};
+const CALM_P=()=>['Mantenha a calma, '+nm()+'. Estamos consigo e vamos ver o melhor caminho em conjunto.',cap(nm())+', respire fundo: há um plano e vamos segui-lo passo a passo.','Sei que isto preocupa, '+nm()+', mas ainda há tempo para agir com segurança.','Tranquilize-se, '+nm()+': o sistema está a acompanhar a água por si.',cap(nm())+', a água começou a acumular nalgumas ruas. Não é motivo para pânico; vamos com calma.','Respire devagar, '+nm()+'. Primeiro o mais importante: a sua segurança.'];
+function cap(t){return t.charAt(0).toUpperCase()+t.slice(1);}
+const ADV=['Evite atravessar água em movimento e não conduza por vias alagadas.','Afaste-se de fios, postes e aparelhos elétricos molhados.','Leve só o essencial: telemóvel, água e documentos.','Se puder, avise a família e os vizinhos de que vai deslocar-se.','Procure um ponto mais alto e fique longe da água.'];
+const Q=['Está sozinho(a) neste momento?','Tem crianças ou idosos consigo?','Consegue chegar a pé até lá?','Quer que lhe explique o caminho com mais pormenor?'];
+function routeS(s){const r=s.rotas[0];if(!r)return'De momento não há uma rota segura calculada: suba para o ponto mais alto, fique longe da água e aguarde as equipas.';
+  return r.metros<1?'O(A) senhor(a) já se encontra numa zona segura ('+r.zona+'); permaneça aí.':pick('rt',['O local mais seguro é '+r.zona+', a cerca de '+r.metros+' m. Siga a Rota 1 marcada no mapa.','Recomendo '+r.zona+' ('+r.metros+' m, risco '+r.risco+'). O caminho está assinalado no mapa.','O melhor destino agora é '+r.zona+', a uns '+r.metros+' m. Acompanhe a linha da Rota 1.']);}
+function ruleOpen(s){if(!s.ha_cheia)return pick('nf',['Neste momento não há alagamento, '+nm()+'. Fique descansado(a); estou aqui se precisar.','Está tudo calmo por agora, '+nm()+'. Se a água começar a subir, aviso-o(a) logo.']);
+  return [pick('c',CALM_P()),routeS(s),pick('a1',ADV),pick('q',Q)].join(' ');}
+function ruleUpd(s){if(!s.ha_cheia)return pick('u0',['A água já baixou, '+nm()+'. Mesmo assim, evite zonas ainda molhadas e acompanhe os avisos.','Boas notícias, '+nm()+': já não há alagamento. Mantenha-se atento(a) nas próximas horas.']);
+  return pick('u1',['Houve uma alteração. '+routeS(s),'Atualização, '+nm()+': '+routeS(s)]);}
+function ruleReply(t,s){t=t.toLowerCase();
+  if(/rota|caminho|onde|para onde|evacu|local seguro/.test(t))return routeS(s)+' '+pick('q2',['Quer que repita ou explique melhor?','Está a conseguir seguir o caminho?']);
+  if(/crian|idos|beb[ée]|avó|avô/.test(t))return pick('k',['Com crianças ou idosos, vá devagar, de mão dada, e evite qualquer trecho com água acima do tornozelo.','Priorize quem tem mais dificuldade em andar: caminhe ao ritmo deles e pare se a água subir.'])+' '+routeS(s);
+  if(/carro|conduz|moto|viatura|carrinha/.test(t))return pick('v',['Não conduza por vias alagadas: cerca de 30 cm de água já podem fazer flutuar um carro. Deixe o veículo e siga a pé.','Se a rua estiver alagada, deixe o veículo onde está e vá a pé pelo caminho indicado.'])+' '+routeS(s);
+  if(/el[ée]tric|luz|fio|corrente|tomada|quadro/.test(t))return pick('e',['Afaste-se de fios e quadros elétricos e não toque em nada molhado. Se for seguro, desligue a corrente no quadro com as mãos secas.','Com água por perto, a eletricidade é um risco sério: não mexa em aparelhos molhados e mantenha-se longe de postes e fios.']);
+  if(/medo|calma|nervos|assust|p[âa]nico|aflit|ansios/.test(t))return pick('m',['É normal sentir medo, '+nm()+'. Inspire fundo e expire devagar, duas ou três vezes. Dê o próximo passo: '+routeS(s),'Estou aqui consigo. Vamos dividir isto em passos pequenos, e o primeiro é este: '+routeS(s),'Faz bem em perguntar. Respire com calma: o sistema continua a acompanhar a situação por si.']);
+  if(/[áa]gua|subir|n[íi]vel|profund|alag/.test(t))return 'Neste momento há '+s.vias_alagadas+' via(s) alagada(s). A água mais escura no mapa é mais funda; evite essas zonas. '+pick('a3',ADV);
+  if(/ajuda|socorro|emerg|bombeir|ambul|pol[íi]cia/.test(t))return 'Se estiver em perigo imediato, contacte os serviços de emergência locais ou peça ajuda a um vizinho. Enquanto isso, '+pick('a4',ADV).toLowerCase();
+  return pick('d',['Compreendo, '+nm()+'. ','Entendido. ','Obrigado por me dizer. '])+pick('a2',ADV)+' '+routeS(s);}
+async function gen(kind,txt){const s=A.snapshot();
+  if(typeof KEY!=='undefined'&&KEY){try{const u='MOMENTO: '+kind+'\nESTADO: '+JSON.stringify(s)+(txt?'\nMENSAGEM DA PESSOA: '+txt:'');const x=(await callG(SYS_C,u,hist.slice(-8),false)).replace(/\*\*/g,'').trim().slice(0,700);hist.push({role:'user',parts:[{text:u}]},{role:'model',parts:[{text:x}]});return x;}catch(e){}}
+  return kind==='pergunta'?ruleReply(txt,s):kind==='atualizacao'?ruleUpd(s):ruleOpen(s);}
+async function say(kind,txt){while(busy)await new Promise(r=>setTimeout(r,200));busy=true;const d=msg('…','b'),t0=Date.now();let x;try{x=await gen(kind,txt);}catch(e){x='Estou aqui consigo. Mantenha a calma e afaste-se da água.';}
+  await new Promise(r=>setTimeout(r,Math.max(0,800-(Date.now()-t0))));d.textContent=x;lastBot=Date.now();L().scrollTop=L().scrollHeight;busy=false;}
+function send(){const v=$('fcI').value.trim();if(!v)return;$('fcI').value='';msg(v,'u');say('pergunta',v);}
+$('fcG').onclick=send;$('fcI').onkeydown=e=>{if(e.key==='Enter')send();};
+$('fcX').onclick=()=>{el.style.display='none';open=false;};
+window.openFloodChat=force=>{el.style.display='flex';open=true;if(isMob()){chat.style.display='none';}if(!L().children.length)setTimeout(()=>say('abertura'),1200);if(force)$('fcI').focus();};
+let lt=0;const t1=window.tick;window.tick=function(t){t1&&t1(t);if(t-lt<2)return;lt=t;
+  const f=window.simFloodInfo?simFloodInfo().wet>0:false;
+  if(f&&!wasFlood){wasFlood=true;lastKey='';L().innerHTML='';hist.length=0;openFloodChat();return;}
+  if(!f&&wasFlood){wasFlood=false;lastKey='';if(open)say('atualizacao');return;}
+  if(f&&open&&L().children.length){const r=A.snapshot().rotas[0],key=r?r.zona+r.risco:'sem';
+    if(!lastKey)lastKey=key;else if(key!==lastKey){lastKey=key;if(Date.now()-lastBot>20000)say('atualizacao');}}};
+})();
+window.Mercado={hasUser:()=>!!uMark,ask,answer,dist,stockOf,orders,setUser:(x,z,n)=>placeUser(x,z,n||'Local escolhido')};
+})();
+</script>
+<script>
+// ===== EDM-IP: iluminação pública (2 torres) + janela de senha reutilizável =====
+(function(){
+const $=id=>document.getElementById(id);
+const css=document.createElement('style');
+css.textContent='.tw .beam,.tw .halo{opacity:0;transition:opacity .6s}.tw.on .beam{opacity:.5}.tw.on .halo{opacity:1;animation:edp 1.8s ease-in-out infinite}.tw .lamp{fill:#555;transition:fill .5s}.tw.on .lamp{fill:#ffe27a}@keyframes edp{50%{opacity:.55}}@keyframes edk{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}';
+document.head.appendChild(css);
+// ---- janela de senha genérica (reutilizada nos semáforos) ----
+const AM=document.createElement('div');AM.id='authM';AM.style.cssText='position:fixed;inset:0;z-index:58;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;padding:14px';
+AM.innerHTML='<form class="box" id="authF" style="background:#0f1c18;width:min(340px,100%);padding:16px;font-size:13px"><div style="display:flex;justify-content:space-between;align-items:center"><b id="authT"></b><button type="button" id="authX">✕</button></div><p id="authH" style="color:#b9c9c3;margin:8px 0"></p><div id="authR"></div><input id="authI" type="password" inputmode="numeric" autocomplete="off" class="mki" placeholder="Senha"><div id="authE" style="color:#ff8a8a;min-height:16px;margin:6px 0"></div><button type="submit" style="width:100%;padding:10px;font-weight:700">Entrar</button></form>';
+document.body.appendChild(AM);let cb=null;
+AM.onsubmit=e=>{e.preventDefault();const r=cb&&cb.check($('authI').value.trim());
+  if(r){AM.style.display='none';const f=cb.onOk;cb=null;f(r);}
+  else{$('authE').textContent='Senha incorreta.';$('authI').value='';$('authF').style.animation='none';void $('authF').offsetWidth;$('authF').style.animation='edk .3s';}};
+$('authX').onclick=()=>{AM.style.display='none';cb=null;};
+AM.addEventListener('click',e=>{if(e.target===AM){AM.style.display='none';cb=null;return;}const r=e.target.closest('[data-c]');if(r)$('authI').value=r.dataset.c;});
+window.AuthUI={prompt(title,hint,check,onOk,extra){cb={check,onOk};$('authT').textContent=title;$('authH').textContent=hint||'';$('authR').innerHTML=extra||'';$('authE').textContent='';$('authI').value='';AM.style.display='flex';setTimeout(()=>$('authI').focus(),50);}};
+// ---- candeeiros do modelo 3D ----
+const lamps=[],ST=[true,true];
+const glowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d'),r=g.createRadialGradient(64,64,0,64,64,64);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.35,'rgba(255,255,255,.35)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})();
+const OFFC=new THREE.Color(0x3a3f42);
+function initLamps(){
+  city.updateMatrixWorld(true);
+  city.traverse(o=>{if(!o.isMesh||!/WhiteGlow/.test(o.name))return;let p=o.parent,ok=false;while(p){if(/^StreetLamp/.test(p.name)){ok=true;break;}p=p.parent;}if(!ok)return;
+    const m=o.material=o.material.clone(),pos=new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:0xffe3a0,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0}));sp.position.copy(pos);scene.add(sp);
+    const pl=new THREE.Mesh(new THREE.CircleGeometry(11,36),new THREE.MeshBasicMaterial({map:glowTex,color:0xffe3a0,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0}));pl.rotation.x=-Math.PI/2;pl.position.set(pos.x,groundTop+.15,pos.z);pl.renderOrder=3;scene.add(pl);
+    lamps.push({m,sp,pl,x:pos.x,on:m.color.clone(),em:m.emissive?m.emissive.clone():null,ei:m.emissiveIntensity,cur:1,tg:1,t:0});});
+  lamps.sort((a,b)=>a.x-b.x);lamps.forEach((l,i)=>l.t=i<lamps.length/2?0:1);
+  lamps.forEach(l=>{l.tg=ST[l.t]?1:0;l.cur=l.tg;});
+}
+const t0=window.tick;window.tick=function(t){t0&&t0(t);
+  lamps.forEach(l=>{l.cur+=(l.tg-l.cur)*.12;if(Math.abs(l.tg-l.cur)<.004)l.cur=l.tg;
+    const v=l.tg===1&&l.cur<.9?l.cur*(.65+.35*Math.random()):l.cur;
+    l.m.color.copy(OFFC).lerp(l.on,v);if(l.em){l.m.emissive.copy(l.em).multiplyScalar(v);l.m.emissiveIntensity=l.ei;}
+    l.sp.material.opacity=.9*v;l.sp.scale.setScalar(5+5*v);l.pl.material.opacity=.5*v;});};
+const pc=window.onCityReady;window.onCityReady=function(){pc&&pc();initLamps();};
+// ---- estado / API (ponto de ligação ao hardware real: ouvir o evento 'edmip') ----
+function apply(i,on,src){ST[i]=on;if(src!=='api'||src==='sync')fetch(window.SC_API+'/api/luz',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:i+1,ligado:!!on})}).catch(()=>{});lamps.forEach(l=>{if(l.t===i)l.tg=on?1:0;});paint();
+  console.log('[EDM-IP simulado] Torre '+(i+1)+' → '+(on?'LIGADA':'DESLIGADA'));
+  window.dispatchEvent(new CustomEvent('edmip',{detail:{torre:i+1,ligada:on,origem:src||'ui'}}));}
+window.EDMIP={estado:()=>ST.slice(),set:(i,on)=>apply(i,!!on,'api')};
+// ---- painel das 2 torres ----
+const tower=i=>'<svg class="tw'+(ST[i]?' on':'')+'" id="edmS'+i+'" viewBox="0 0 100 150" width="100%" style="max-height:150px"><defs><linearGradient id="bg'+i+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe27a" stop-opacity=".8"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></linearGradient></defs><polygon class="beam" points="62,38 92,142 32,142" fill="url(#bg'+i+')"/><circle class="halo" cx="62" cy="34" r="16" fill="#ffe27a" opacity=".35"/><rect x="26" y="40" width="7" height="104" fill="#8a949a"/><rect x="22" y="142" width="15" height="6" fill="#6b757a"/><rect x="26" y="34" width="38" height="5" fill="#8a949a"/><ellipse class="lamp" cx="62" cy="38" rx="11" ry="5"/></svg>';
+const P=document.createElement('div');P.id='edmP';P.style.cssText='position:fixed;inset:0;z-index:57;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:14px';
+P.innerHTML='<div class="box" style="background:#0f1c18;width:min(440px,100%);max-height:94vh;overflow:auto;padding:14px;font-size:12.5px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>⚡ EDM-IP · Iluminação pública</b><button id="edmX">✕ Fechar</button></div><div style="display:flex;gap:10px">'
+ +[0,1].map(i=>'<div style="flex:1;text-align:center;padding:8px;border:1px solid #25423b;border-radius:10px">'+tower(i)+'<div><b>Torre '+(i+1)+'</b></div><div id="edmL'+i+'" style="margin:2px 0 6px"></div><button id="edmB'+i+'" style="width:100%">—</button></div>').join('')
+ +'</div><div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><button id="edmA1">Ligar todas</button><button id="edmA0">Desligar todas</button><button id="edmOut">Terminar sessão</button></div><p style="color:#8fa39c;margin:8px 0 0">O estado é refletido nos candeeiros do mapa 3D. Ligação ao hardware real: ainda não ligada (simulação).</p></div>';
+document.body.appendChild(P);
+function paint(){[0,1].forEach(i=>{const s=$('edmS'+i);if(!s)return;s.classList.toggle('on',ST[i]);$('edmL'+i).innerHTML=ST[i]?'<span style="color:#ffe27a">● LIGADA</span>':'<span style="color:#8fa39c">● DESLIGADA</span>';$('edmB'+i).textContent=ST[i]?'Desligar':'Ligar';});}
+[0,1].forEach(i=>$('edmB'+i).onclick=()=>apply(i,!ST[i]));
+$('edmA1').onclick=()=>{apply(0,true);apply(1,true);};$('edmA0').onclick=()=>{apply(0,false);apply(1,false);};
+const closeP=()=>{P.style.display='none';};$('edmX').onclick=closeP;$('edmOut').onclick=()=>{unlocked=false;closeP();};
+P.addEventListener('click',e=>{if(e.target===P)closeP();});
+addEventListener('keydown',e=>{if(e.key==='Escape'){closeP();AM.style.display='none';cb=null;}});
+let unlocked=false;const openP=()=>{paint();P.style.display='flex';};
+const bar=$('mkBar'),b=document.createElement('button');b.id='edmB';b.textContent='EDM-IP';bar.appendChild(b);
+b.onclick=()=>{if(unlocked)return openP();AuthUI.prompt('EDM-IP · Acesso','Introduza a senha para controlar a iluminação pública.',c=>c==='0000',()=>{unlocked=true;openP();});};
+paint();
+[0,1].forEach(i=>fetch(window.SC_API+'/api/luz',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:i+1,ligado:ST[i]})}).catch(()=>{}));
+})();
+</script>
+<script>
+// ===== SEMÁFOROS: acesso por senha (4 perfis, demonstração) =====
+(function(){
+const $=id=>document.getElementById(id);
+const ROLES={'1111':{n:'Sr. Presidente · Aires Lampião',i:'🏛️'},'2222':{n:'Ambulância',i:'🚑'},'3333':{n:'Polícia',i:'👮'},'4444':{n:'Bombeiro',i:'🚒'}};
+let role=null;
+const extra='<div style="border:1px dashed #2c5248;border-radius:8px;padding:6px 8px;font-size:12px"><div style="color:#8fa39c;margin-bottom:4px">Senhas de demonstração (toque para preencher):</div>'+Object.keys(ROLES).map(c=>'<div data-c="'+c+'" style="cursor:pointer;display:flex;justify-content:space-between;padding:3px 0"><span>'+ROLES[c].i+' '+ROLES[c].n+'</span><b>'+c+'</b></div>').join('')+'</div>';
+function sess(){const t=$('semLive');if(!t)return;let d=$('semSess');if(!d){d=document.createElement('div');d.id='semSess';d.style.cssText='font-size:12px;margin:4px 0;color:#b9c9c3';t.after(d);}
+  d.innerHTML=role?'🔐 Operador: <b>'+role.i+' '+role.n+'</b> <button id="semOut" style="padding:2px 8px">Sair</button>':'🔒 Controlo protegido por senha';
+  const o=$('semOut');if(o)o.onclick=()=>{role=null;sess();};}
+new MutationObserver(()=>{if($('semLive')&&!$('semSess'))sess();}).observe($('panel'),{childList:true});
+const gate=fn=>{if(role)return fn();AuthUI.prompt('Semáforos · Acesso','Introduza a senha do seu perfil para manipular os semáforos.',c=>ROLES[c]||null,r=>{role=r;sess();fn();},extra);};
+const log=w=>{console.log('[Semáforos simulado] '+role.n+' → '+w);window.dispatchEvent(new CustomEvent('semcmd',{detail:{operador:role.n,comando:w}}));};
+const oc=SEMLIVE.cmd,ol=SEMLIVE.lock;
+SEMLIVE.cmd=m=>gate(()=>{oc(m);log(m);});
+SEMLIVE.lock=()=>gate(()=>{ol();log('trancar');});
+})();
+</script>
+<script>
+// ===== VOZ + MODO CONVERSA — chat do assistente (mk) e chat de cheias (fc) =====
+// 🔊 liga/desliga a leitura em voz das respostas · 🎙️ Conversa: fala-se, a resposta é lida e volta a ouvir.
+// Requer Chrome/Edge e abrir por http://localhost:5000 (microfone). API: window.Voz.falar(txt), Voz.parar()
+(function(){
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition,TTS=window.speechSynthesis,$=id=>document.getElementById(id);
+let voiceOn=true;try{voiceOn=localStorage.getItem('sc_voz')!=='0';}catch(e){}
+let voz=null,q=[],speaking=false,conv=null,rec=null,waiting=false,wT=0;const seen=new WeakMap(),convBtns=[],vozBtns=[];
+function pick(){const v=TTS?TTS.getVoices():[];voz=v.find(x=>/^pt-PT/i.test(x.lang))||v.find(x=>/^pt/i.test(x.lang))||null;}
+if(TTS){pick();TTS.onvoiceschanged=pick;}
+const limpar=t=>t.replace(/https?:\S+/g,' ').replace(/[*_`#>]/g,'').replace(/[\u{1F000}-\u{1FFFF}\u{2190}-\u{2BFF}\u{FE0F}]/gu,' ').replace(/\s+/g,' ').trim().slice(0,700);
+function falar(t){if(!TTS||!voiceOn)return;t=limpar(t||'');if(!t)return;t.split(/(?<=[.!?])\s+/).forEach(s=>{s=s.trim();if(s)q.push(s);});next();}
+function next(){if(speaking)return;const s=q.shift();if(!s){fim();return;}speaking=true;stopRec();
+  const u=new SpeechSynthesisUtterance(s);u.lang=voz?voz.lang:'pt-PT';if(voz)u.voice=voz;u.onend=u.onerror=()=>{speaking=false;next();};TTS.speak(u);}
+function parar(){q=[];speaking=false;if(TTS)TTS.cancel();}
+function fim(){if(conv){waiting=false;clearTimeout(wT);setTimeout(ouvir,500);}}
+function stopRec(){if(rec){const r=rec;rec=null;r.onend=null;try{r.abort();}catch(e){}}}
+function ouvir(){if(!conv||speaking||waiting||!SR||rec)return;
+  const r=new SR();rec=r;r.lang='pt-PT';r.interimResults=false;r.maxAlternatives=1;
+  r.onresult=e=>{const t=(e.results[0][0].transcript||'').trim();if(t&&conv){waiting=true;clearTimeout(wT);wT=setTimeout(()=>{waiting=false;ouvir();},30000);conv.input().value=t;conv.send();}};
+  r.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){sair('Microfone bloqueado. Permita o acesso ao microfone no navegador (use http://localhost:5000).');}};
+  r.onend=()=>{if(rec===r)rec=null;if(conv&&!speaking&&!waiting)setTimeout(ouvir,400);ui();};
+  try{r.start();}catch(e){rec=null;}ui();}
+function sair(m){conv=null;waiting=false;clearTimeout(wT);stopRec();ui();if(m)alert(m);}
+function toggleConv(c){if(conv&&conv.id===c.id){sair();return;}
+  if(!SR){alert('Este navegador não suporta reconhecimento de voz. Use o Google Chrome ou o Microsoft Edge.');return;}
+  parar();voiceOn=true;try{localStorage.setItem('sc_voz','1');}catch(e){}conv=c;waiting=false;ui();ouvir();}
+function toggleVoz(){voiceOn=!voiceOn;try{localStorage.setItem('sc_voz',voiceOn?'1':'0');}catch(e){}if(!voiceOn){parar();if(conv)sair();}ui();}
+function ui(){vozBtns.forEach(b=>{b.textContent=voiceOn?'🔊':'🔇';b.title=voiceOn?'Voz ligada (desligar)':'Voz desligada (ligar)';});
+  convBtns.forEach(({b,c})=>{const a=conv&&conv.id===c.id;b.textContent=a?(rec?'🎙️ a ouvir…':'🎙️ …'):'🎙️ Conversa';b.style.outline=a?'2px solid #3ddc97':'';b.title=a?'Terminar o modo conversa':'Modo conversa: fale e o assistente responde em voz';});}
+function textoBot(d){const c=d.cloneNode(true);c.querySelectorAll('button,.sim,div[style*="font-size:10"]').forEach(x=>x.remove());c.querySelectorAll('br').forEach(b=>b.replaceWith(' '));return c.textContent.trim();}
+const ehBot=(d,k)=>k==='m'?d.classList.contains('b'):(d.style.marginLeft!=='auto'&&d.style.fontSize!=='11px');
+function scan(L,k){if(!L)return;const vis=!!L.offsetParent;for(const d of L.children){if(!ehBot(d,k))continue;const t=textoBot(d);
+  if(!t||t==='…'||/^a pensar/i.test(t)||seen.get(d)===t)continue;seen.set(d,t);if(vis)falar(t);}}
+function attach(L,k,hdrBefore,c,wrap){let tm=0;scan(L,k);new MutationObserver(()=>{clearTimeout(tm);tm=setTimeout(()=>scan(L,k),350);}).observe(L,{childList:true,subtree:true,characterData:true});
+  const mk=(txt,fn)=>{const b=document.createElement('button');b.type='button';b.onclick=fn;return b;};
+  const bv=mk('',toggleVoz),bc=mk('',()=>toggleConv(c));vozBtns.push(bv);convBtns.push({b:bc,c});
+  if(wrap){const s=document.createElement('span');s.style.cssText='display:flex;gap:6px';hdrBefore.parentNode.insertBefore(s,hdrBefore);s.append(bc,bv,hdrBefore);}
+  else{hdrBefore.parentNode.insertBefore(bc,hdrBefore);hdrBefore.parentNode.insertBefore(bv,hdrBefore);}
+  hdrBefore.addEventListener('click',()=>{parar();if(conv&&conv.id===c.id)sair();});ui();}
+let okM=false,okF=false;const iv=setInterval(()=>{
+  if(!okM&&$('mkLog')&&$('mkX')&&$('mkIn')){okM=true;attach($('mkLog'),'m',$('mkX'),{id:'m',input:()=>$('mkIn'),send:()=>$('mkSend').onclick()},false);
+    $('mkSend').addEventListener('click',()=>{if(!conv)parar();});$('mkIn').addEventListener('keydown',e=>{if(e.key==='Enter'&&!conv)parar();});}
+  if(!okF&&$('fcL')&&$('fcX')&&$('fcI')){okF=true;attach($('fcL'),'f',$('fcX'),{id:'f',input:()=>$('fcI'),send:()=>$('fcG').onclick()},true);
+    $('fcG').addEventListener('click',()=>{if(!conv)parar();});$('fcI').addEventListener('keydown',e=>{if(e.key==='Enter'&&!conv)parar();});}
+  if(okM&&okF)clearInterval(iv);},700);
+window.Voz={falar,parar,get ligada(){return voiceOn;}};
+})();
+</script>
+</body></html>
